@@ -300,6 +300,52 @@ header h1 {
     margin-bottom: 12px;
 }
 
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 12px;
+}
+
+.geist-button-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--fg);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.geist-button-outline:hover:not(:disabled) {
+    background: #f5f5f5;
+    border-color: #e0e0e0;
+}
+
+.geist-button-outline:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.geist-button-outline.text-red-600 {
+    color: #dc2626;
+    border-color: #fee2e2;
+}
+
+.geist-button-outline.text-red-600:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #fecaca;
+}   margin-bottom: 12px;
+}
+
 .task-progress {
     flex: 1;
 }

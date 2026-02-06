@@ -4,6 +4,8 @@ const API_KEY = 'sk-D2jm4Z0kSTML2eovGrpGyehCXkr_aYS45JIxGYwYTAg';
 let tasks = [];
 let selectedTasks = new Set();
 let refreshInterval = null;
+let currentPage = 1;
+let pageSize = 20;
 
 async function apiRequest(url, options = {}) {
     const headers = {
@@ -100,10 +102,19 @@ function renderTasks() {
     
     if (tasks.length === 0) {
         taskList.innerHTML = '<div class="empty-state">暂无任务</div>';
+        updatePaginationControls(0, 1);
         return;
     }
 
-    taskList.innerHTML = tasks.map(renderTask).join('');
+    const totalCount = tasks.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    
+    const startIndex = (currentPage - 1) * pageSize;
+    const visibleTasks = tasks.slice(startIndex, startIndex + pageSize);
+    
+    taskList.innerHTML = visibleTasks.map(renderTask).join('');
+    updatePaginationControls(totalCount, totalPages);
 }
 
 async function loadTasks() {
@@ -422,3 +433,80 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+function updatePaginationControls(totalCount, totalPages) {
+    const info = document.getElementById('pagination-info');
+    const prevBtn = document.getElementById('page-prev');
+    const nextBtn = document.getElementById('page-next');
+    const sizeSelect = document.getElementById('page-size');
+
+    if (sizeSelect && String(sizeSelect.value) !== String(pageSize)) {
+        sizeSelect.value = String(pageSize);
+    }
+
+    if (info) {
+        info.textContent = `第 ${totalCount === 0 ? 0 : currentPage} / ${totalPages} 页 · 共 ${totalCount} 条`;
+    }
+    if (prevBtn) prevBtn.disabled = totalCount === 0 || currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = totalCount === 0 || currentPage >= totalPages;
+}
+
+function goPrevPage() {
+    if (currentPage <= 1) return;
+    currentPage -= 1;
+    renderTasks();
+}
+
+function goNextPage() {
+    const totalCount = tasks.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (currentPage >= totalPages) return;
+    currentPage += 1;
+    renderTasks();
+}
+
+function changePageSize() {
+    const sizeSelect = document.getElementById('page-size');
+    const value = sizeSelect ? parseInt(sizeSelect.value, 10) : 0;
+    if (!value || value === pageSize) return;
+    pageSize = value;
+    currentPage = 1;
+    renderTasks();
+}
+
+function selectVisibleAll() {
+    const totalCount = tasks.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalCount);
+    
+    for (let i = startIndex; i < endIndex; i++) {
+        selectedTasks.add(tasks[i].task_id);
+    }
+    
+    updateTaskCheckboxes();
+    updateDeleteButton();
+}
+
+function selectAllFiltered() {
+    tasks.forEach(task => {
+        selectedTasks.add(task.task_id);
+    });
+    
+    updateTaskCheckboxes();
+    updateDeleteButton();
+}
+
+function clearAllSelection() {
+    selectedTasks.clear();
+    document.getElementById('selectAll').checked = false;
+    updateTaskCheckboxes();
+    updateDeleteButton();
+}
+
+function updateTaskCheckboxes() {
+    const checkboxes = document.querySelectorAll('.task-select');
+    checkboxes.forEach(cb => {
+        cb.checked = selectedTasks.has(cb.value);
+    });
+}
