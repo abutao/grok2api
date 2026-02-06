@@ -383,10 +383,6 @@ async function clearAllTasks() {
         return;
     }
     
-    if (!confirm('再次确认：真的要清除所有任务吗？')) {
-        return;
-    }
-    
     try {
         const result = await apiRequest('/v1/video/tasks/all', {
             method: 'DELETE'
