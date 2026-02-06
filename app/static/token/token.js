@@ -189,6 +189,7 @@ function updateStats(data) {
   });
 
   const imageQuota = Math.floor(chatQuota / 2);
+  const videoQuota = Math.floor(chatQuota / 4);
 
   setText('stat-total', totalTokens.toLocaleString());
   setText('stat-active', activeTokens.toLocaleString());
@@ -197,6 +198,7 @@ function updateStats(data) {
 
   setText('stat-chat-quota', chatQuota.toLocaleString());
   setText('stat-image-quota', imageQuota.toLocaleString());
+  setText('stat-video-quota', videoQuota.toLocaleString());
   setText('stat-total-calls', totalCalls.toLocaleString());
 
   updateTabCounts({

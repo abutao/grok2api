@@ -129,7 +129,12 @@ class VideoService:
                 )
 
             if response.status_code != 200:
-                logger.error(f"Create post failed: {response.status_code}")
+                logger.error(f"Create post failed: {response.status_code}, payload: {payload}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"Create post error response: {error_data}")
+                except Exception:
+                    logger.error(f"Create post error text: {response.text}")
                 raise UpstreamException(
                     f"Failed to create post: {response.status_code}"
                 )

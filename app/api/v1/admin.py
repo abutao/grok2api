@@ -117,6 +117,12 @@ async def admin_voice_page():
     return await render_template("voice/voice.html")
 
 
+@router.get("/admin/video", response_class=HTMLResponse, include_in_schema=False)
+async def admin_video_page():
+    """视频任务测试页"""
+    return await render_template("video/video.html")
+
+
 class VoiceTokenResponse(BaseModel):
     token: str
     url: str

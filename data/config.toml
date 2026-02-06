@@ -5,24 +5,24 @@ thinking = true
 dynamic_statsig = true
 filter_tags = ["xaiartifact","xai:tool_usage_card","grok:render"]
 timeout = 120
-base_proxy_url = ""
-asset_proxy_url = ""
+base_proxy_url = "http://127.0.0.1:7897"
+asset_proxy_url = "http://127.0.0.1:7897"
 cf_clearance = ""
 max_retry = 3
 retry_status_codes = [401,429,403]
 retry_backoff_base = 0.5
-retry_backoff_factor = 2.0
-retry_backoff_max = 30.0
-retry_budget = 90.0
-stream_idle_timeout = 120.0
-video_idle_timeout = 90.0
+retry_backoff_factor = 2
+retry_backoff_max = 30
+retry_budget = 90
+stream_idle_timeout = 120
+video_idle_timeout = 90
 
 [app]
 app_url = "http://127.0.0.1:8000"
-app_key = "grok2api"
-api_key = ""
+app_key = "Zyt123456"
+api_key = "sk-D2jm4Z0kSTML2eovGrpGyehCXkr_aYS45JIxGYwYTAg"
 image_format = "url"
-video_format = "html"
+video_format = "url"
 
 [token]
 auto_refresh = true

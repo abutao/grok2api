@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频生成任务测试</title>
+    <link rel="stylesheet" href="/static/video/video.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 视频生成任务测试</h1>
+            <p class="subtitle">异步视频生成任务管理系统</p>
+        </header>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>创建新任务</h2>
+                <form id="createTaskForm" class="form">
+                    <div class="form-group">
+                        <label for="prompt">提示词 *</label>
+                        <textarea id="prompt" name="prompt" rows="3" placeholder="描述你想要生成的视频内容..." required></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="model">模型</label>
+                            <select id="model" name="model">
+                                <option value="grok-imagine-1.0-video" selected>grok-imagine-1.0-video</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="aspectRatio">宽高比</label>
+                            <select id="aspectRatio" name="aspect_ratio">
+                                <option value="2:3">2:3 (竖屏)</option>
+                                <option value="3:2" selected>3:2 (横屏)</option>
+                                <option value="1:1">1:1 (方形)</option>
+                                <option value="9:16">9:16 (竖屏)</option>
+                                <option value="16:9">16:9 (横屏)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="videoLength">视频时长</label>
+                            <select id="videoLength" name="video_length">
+                                <option value="6" selected>6 秒</option>
+                                <option value="10">10 秒</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="resolution">分辨率</label>
+                            <select id="resolution" name="resolution">
+                                <option value="480p" selected>480p</option>
+                                <option value="720p">720p</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="preset">风格预设</label>
+                        <select id="preset" name="preset">
+                            <option value="fun">有趣 (Fun)</option>
+                            <option value="normal" selected>正常 (Normal)</option>
+                            <option value="spicy">刺激 (Spicy)</option>
+                            <option value="custom">自定义 (Custom)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="imageUrl">图片 URL（可选，用于图片转视频）</label>
+                        <input type="url" id="imageUrl" name="image_url" placeholder="https://example.com/image.jpg">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">创建任务</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>任务列表</h2>
+                    <div class="task-actions-header">
+                        <button id="refreshBtn" class="btn btn-secondary">刷新</button>
+                        <button id="deleteSelectedBtn" class="btn btn-danger" style="display: none;">删除选中</button>
+                        <button id="deleteFailedBtn" class="btn btn-danger">清除失败</button>
+                        <button id="clearAllBtn" class="btn btn-danger">清除所有</button>
+                    </div>
+                </div>
+                <div class="task-list-header">
+                    <label class="checkbox-wrapper">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <span>全选</span>
+                    </label>
+                </div>
+                <div id="taskList" class="task-list">
+                    <div class="empty-state">暂无任务</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="taskModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>任务详情</h3>
+                    <button class="close-btn" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/video/video.js"></script>
+</body>
+</html>

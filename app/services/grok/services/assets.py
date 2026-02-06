@@ -260,8 +260,8 @@ class BaseService:
             UpstreamException: 当获取失败时
         """
         try:
-            async with AsyncSession() as session:
-                response = await session.get(url, timeout=10)
+            async with AsyncSession(impersonate="chrome") as session:
+                response = await session.get(url, timeout=30, allow_redirects=True)
                 if response.status_code >= 400:
                     raise UpstreamException(
                         message=f"Failed to fetch resource: {response.status_code}",
@@ -274,7 +274,7 @@ class BaseService:
                 )[0]
                 b64 = base64.b64encode(response.content).decode()
 
-                logger.debug(f"Fetched: {url} -> {filename}")
+                logger.info(f"Fetched: {url} -> {filename} ({len(b64)} bytes)")
                 return filename, b64, content_type
         except Exception as e:
             logger.error(f"Fetch failed: {url} - {e}")
@@ -649,65 +649,84 @@ class DownloadService(BaseService):
                         )
                         return cache_path, mime_type
 
-                    # 下载文件
+                    # 下载文件（带重试机制）
                     if not file_path.startswith("/"):
                         file_path = f"/{file_path}"
 
                     url = f"{DOWNLOAD_API}{file_path}"
                     headers = self._dl_headers(token, file_path)
 
-                    session = await self._get_session()
-                    response = await session.get(
-                        url,
-                        headers=headers,
-                        proxies=self._proxies(),
-                        timeout=self.timeout,
-                        allow_redirects=True,
-                        impersonate=BROWSER,
-                        stream=True,
-                    )
+                    max_retries = 3
+                    retry_delay = 2
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            session = await self._get_session()
+                            response = await session.get(
+                                url,
+                                headers=headers,
+                                proxies=self._proxies(),
+                                timeout=self.timeout,
+                                allow_redirects=True,
+                                impersonate=BROWSER,
+                                stream=True,
+                            )
 
-                    if response.status_code != 200:
-                        raise UpstreamException(
-                            message=f"Download failed: {response.status_code}",
-                            details={"path": file_path, "status": response.status_code},
-                        )
+                            if response.status_code != 200:
+                                raise UpstreamException(
+                                    message=f"Download failed: {response.status_code}",
+                                    details={"path": file_path, "status": response.status_code},
+                                )
 
-                    # 保存文件（分块写入，避免大文件占用内存）
-                    tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
-                    try:
-                        async with aiofiles.open(tmp_path, "wb") as f:
-                            if hasattr(response, "aiter_content"):
-                                async for chunk in response.aiter_content():
-                                    if chunk:
-                                        await f.write(chunk)
-                            elif hasattr(response, "aiter_bytes"):
-                                async for chunk in response.aiter_bytes():
-                                    if chunk:
-                                        await f.write(chunk)
-                            elif hasattr(response, "aiter_raw"):
-                                async for chunk in response.aiter_raw():
-                                    if chunk:
-                                        await f.write(chunk)
-                            else:
-                                await f.write(response.content)
-                        os.replace(tmp_path, cache_path)
-                    finally:
-                        if tmp_path.exists() and not cache_path.exists():
+                            # 保存文件（分块写入，避免大文件占用内存）
+                            tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
                             try:
-                                tmp_path.unlink()
-                            except Exception:
-                                pass
-                    mime_type = response.headers.get(
-                        "content-type", DEFAULT_MIME
-                    ).split(";")[0]
+                                async with aiofiles.open(tmp_path, "wb") as f:
+                                    if hasattr(response, "aiter_content"):
+                                        async for chunk in response.aiter_content():
+                                            if chunk:
+                                                await f.write(chunk)
+                                    elif hasattr(response, "aiter_bytes"):
+                                        async for chunk in response.aiter_bytes():
+                                            if chunk:
+                                                await f.write(chunk)
+                                    elif hasattr(response, "aiter_raw"):
+                                        async for chunk in response.aiter_raw():
+                                            if chunk:
+                                                await f.write(chunk)
+                                    else:
+                                        await f.write(response.content)
+                                os.replace(tmp_path, cache_path)
+                            finally:
+                                if tmp_path.exists() and not cache_path.exists():
+                                    try:
+                                        tmp_path.unlink()
+                                    except Exception:
+                                        pass
+                            mime_type = response.headers.get(
+                                "content-type", DEFAULT_MIME
+                            ).split(";")[0]
 
-                    logger.info(f"Download success: {file_path}")
+                            logger.info(f"Download success: {file_path}")
 
-                    # 检查缓存限制
-                    asyncio.create_task(self.check_limit())
+                            # 检查缓存限制
+                            asyncio.create_task(self.check_limit())
 
-                    return cache_path, mime_type
+                            return cache_path, mime_type
+                            
+                        except Exception as e:
+                            error_msg = str(e)
+                            if "TLS" in error_msg or "SSL" in error_msg or "OpenSSL" in error_msg:
+                                if attempt < max_retries - 1:
+                                    logger.warning(f"TLS error on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s: {e}")
+                                    await asyncio.sleep(retry_delay)
+                                    retry_delay *= 2
+                                    continue
+                                else:
+                                    logger.error(f"TLS error after {max_retries} attempts: {e}")
+                                    raise UpstreamException(f"Download failed due to TLS error after {max_retries} attempts: {e}")
+                            else:
+                                raise
 
             except Exception as e:
                 logger.error(f"Download failed: {file_path} - {e}")

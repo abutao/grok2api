@@ -29,6 +29,7 @@ from app.api.v1.chat import router as chat_router  # noqa: E402
 from app.api.v1.image import router as image_router  # noqa: E402
 from app.api.v1.files import router as files_router  # noqa: E402
 from app.api.v1.models import router as models_router  # noqa: E402
+from app.api.v1.video_tasks import router as video_tasks_router  # noqa: E402
 from app.services.token import get_scheduler  # noqa: E402
 
 
@@ -59,6 +60,10 @@ async def lifespan(app: FastAPI):
         interval = min(basic_interval, super_interval)
         scheduler = get_scheduler(interval)
         scheduler.start()
+
+    # 4. 加载视频任务
+    from app.core.video_tasks import load_tasks
+    load_tasks()
 
     logger.info("Application startup complete.")
     yield
@@ -109,6 +114,9 @@ def create_app() -> FastAPI:
         models_router, prefix="/v1", dependencies=[Depends(verify_api_key)]
     )
     app.include_router(files_router, prefix="/v1/files")
+    app.include_router(
+        video_tasks_router, dependencies=[Depends(verify_api_key)]
+    )
 
     # 静态文件服务
     from fastapi.staticfiles import StaticFiles
