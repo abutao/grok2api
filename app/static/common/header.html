@@ -1,6 +1,6 @@
 <nav class="bg-[var(--bg)]/80 backdrop-blur-md fixed top-0 left-0 right-0 z-10">
-  <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-    <div class="flex items-center gap-6">
+  <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-8">
       <div class="flex items-center gap-2">
         <a href="https://github.com/chenyme/grok2api" target="_blank" rel="noopener"
           class="brand-link font-semibold tracking-tight hover:text-black">
@@ -14,23 +14,46 @@
           class="text-xs text-[var(--accents-4)] hover:text-black">@chenyme</a>
       </div>
       <div class="h-4 w-px bg-[var(--border)]"></div>
-      <div class="nav-group">
-        <button type="button" class="nav-link nav-group-trigger text-sm" aria-haspopup="true"
-          aria-expanded="false">服务管理</button>
-        <div class="nav-group-menu">
-          <a href="/admin/token" class="nav-link text-sm" data-nav="/admin/token">Token管理</a>
-          <a href="/admin/config" class="nav-link text-sm" data-nav="/admin/config">配置管理</a>
-          <a href="/admin/cache" class="nav-link text-sm" data-nav="/admin/cache">缓存管理</a>
-        </div>
-      </div>
-      <div class="nav-group">
-        <button type="button" class="nav-link nav-group-trigger text-sm" aria-haspopup="true"
-          aria-expanded="false">更多功能</button>
-        <div class="nav-group-menu">
-          <a href="/admin/voice" class="nav-link text-sm" data-nav="/admin/voice">语音会话</a>
-          <a href="/admin/video" class="nav-link text-sm" data-nav="/admin/video">视频任务</a>
-        </div>
-      </div>
+      <nav class="nav-links" role="navigation" aria-label="主导航">
+        <a href="/admin/token" class="nav-link-item" data-nav="/admin/token">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2H3a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>
+            <path d="M7 8h10M7 12h10M7 16h6"/>
+          </svg>
+          <span>Token管理</span>
+        </a>
+        <a href="/admin/config" class="nav-link-item" data-nav="/admin/config">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m9-9h-6m-6 0h6"/>
+          </svg>
+          <span>配置管理</span>
+        </a>
+        <a href="/admin/cache" class="nav-link-item" data-nav="/admin/cache">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5"/>
+            <path d="M3 12v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>
+            <path d="M12 3v18"/>
+          </svg>
+          <span>缓存管理</span>
+        </a>
+        <a href="/admin/voice" class="nav-link-item" data-nav="/admin/voice">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <span>语音会话</span>
+        </a>
+        <a href="/admin/video" class="nav-link-item" data-nav="/admin/video">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 17 16 12 9 7 16 2 17 9 12 16 17 23 12 16 23 7"/>
+            <rect x="2" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+          <span>视频任务</span>
+        </a>
+      </nav>
     </div>
     <div class="nav-actions">
       <button id="storage-mode-btn" type="button" class="nav-action-btn" title="存储模式">-</button>

@@ -248,6 +248,60 @@ td.table-empty {
   font-weight: 500;
 }
 
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-link-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--accents-5);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.nav-link-item:hover {
+  background: #f5f5f5;
+  color: var(--fg);
+  transform: translateY(-1px);
+}
+
+.nav-link-item.active {
+  background: #e8e8e8;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.nav-link-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 2px;
+}
+
+.nav-icon {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.nav-link-item:hover .nav-icon,
+.nav-link-item.active .nav-icon {
+  opacity: 1;
+}
+
 .nav-badge {
   display: inline-flex;
   align-items: center;
