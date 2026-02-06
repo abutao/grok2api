@@ -1,134 +1,164 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>视频生成任务测试</title>
-    <link rel="stylesheet" href="/static/video/video.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - 视频任务管理</title>
+  <link rel="icon" href="/static/favicon/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="/static/common/common.css?v=4" rel="stylesheet">
+  <link href="/static/video/video.css" rel="stylesheet">
+  <link href="/static/common/toast.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🎬 视频生成任务测试</h1>
-            <p class="subtitle">异步视频生成任务管理系统</p>
-        </header>
 
-        <div class="main-content">
-            <div class="card">
-                <h2>创建新任务</h2>
-                <form id="createTaskForm" class="form">
-                    <div class="form-group">
-                        <label for="prompt">提示词 *</label>
-                        <textarea id="prompt" name="prompt" rows="3" placeholder="描述你想要生成的视频内容..." required></textarea>
-                    </div>
+<body class="min-h-screen flex flex-col" style="background-color: var(--bg);">
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="model">模型</label>
-                            <select id="model" name="model">
-                                <option value="grok-imagine-1.0-video" selected>grok-imagine-1.0-video</option>
-                            </select>
-                        </div>
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-header"></div>
 
-                        <div class="form-group">
-                            <label for="aspectRatio">宽高比</label>
-                            <select id="aspectRatio" name="aspect_ratio">
-                                <option value="2:3">2:3 (竖屏)</option>
-                                <option value="3:2" selected>3:2 (横屏)</option>
-                                <option value="1:1">1:1 (方形)</option>
-                                <option value="9:16">9:16 (竖屏)</option>
-                                <option value="16:9">16:9 (横屏)</option>
-                            </select>
-                        </div>
-                    </div>
+  <!-- Main Content -->
+  <main class="space-y-6 flex-1 container mx-auto max-w-5xl px-6 py-8 fade-in">
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="videoLength">视频时长</label>
-                            <select id="videoLength" name="video_length">
-                                <option value="6" selected>6 秒</option>
-                                <option value="10">10 秒</option>
-                            </select>
-                        </div>
+    <div class="space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-2xl font-semibold tracking-tight">视频任务管理</h2>
+          <p class="text-[var(--accents-4)] mt-1 text-sm">管理 Grok2API 的视频生成任务。</p>
+        </div>
+      </div>
 
-                        <div class="form-group">
-                            <label for="resolution">分辨率</label>
-                            <select id="resolution" name="resolution">
-                                <option value="480p" selected>480p</option>
-                                <option value="720p">720p</option>
-                            </select>
-                        </div>
-                    </div>
+      <div class="h-px bg-[var(--border)] my-6"></div>
 
-                    <div class="form-group">
-                        <label for="preset">风格预设</label>
-                        <select id="preset" name="preset">
-                            <option value="fun">有趣 (Fun)</option>
-                            <option value="normal" selected>正常 (Normal)</option>
-                            <option value="spicy">刺激 (Spicy)</option>
-                            <option value="custom">自定义 (Custom)</option>
-                        </select>
-                    </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="rounded-lg overflow-hidden bg-white border border-[var(--border)]">
+          <div class="px-6 py-4 border-b border-[var(--border)]">
+            <h3 class="text-lg font-semibold">创建新任务</h3>
+          </div>
+          <div class="p-6">
+            <form id="createTaskForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">提示词 *</label>
+                <textarea id="prompt" name="prompt" rows="3" 
+                  class="geist-input" 
+                  placeholder="描述你想要生成的视频内容..." required></textarea>
+              </div>
 
-                    <div class="form-group">
-                        <label for="imageUrl">图片 URL（可选，用于图片转视频）</label>
-                        <input type="url" id="imageUrl" name="image_url" placeholder="https://example.com/image.jpg">
-                    </div>
-
-                    <button type="submit" class="btn btn-primary">创建任务</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2>任务列表</h2>
-                    <div class="task-actions-header">
-                        <button id="refreshBtn" class="btn btn-secondary">刷新</button>
-                    </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2">模型</label>
+                  <select id="model" name="model" class="geist-input">
+                    <option value="grok-imagine-1.0-video" selected>grok-imagine-1.0-video</option>
+                  </select>
                 </div>
-                <div class="task-list-header">
-                    <label class="checkbox-wrapper">
-                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                        <span>全选</span>
-                    </label>
+
+                <div>
+                  <label class="block text-sm font-medium mb-2">宽高比</label>
+                  <select id="aspectRatio" name="aspect_ratio" class="geist-input">
+                    <option value="2:3">2:3 (竖屏)</option>
+                    <option value="3:2" selected>3:2 (横屏)</option>
+                    <option value="1:1">1:1 (方形)</option>
+                    <option value="9:16">9:16 (竖屏)</option>
+                    <option value="16:9">16:9 (横屏)</option>
+                  </select>
                 </div>
-                <div id="taskList" class="task-list">
-                    <div class="empty-state">暂无任务</div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2">视频时长</label>
+                  <select id="videoLength" name="video_length" class="geist-input">
+                    <option value="6" selected>6 秒</option>
+                    <option value="10">10 秒</option>
+                  </select>
                 </div>
-                
-                <div class="pagination-bar">
-                    <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
-                    <div class="flex items-center gap-2">
-                        <button class="geist-button-outline text-xs px-3" onclick="selectVisibleAll()">全选本页</button>
-                        <button class="geist-button-outline text-xs px-3" onclick="selectAllFiltered()">全选全部</button>
-                        <button class="geist-button-outline text-xs px-3" onclick="clearAllSelection()">取消全选</button>
-                        <button id="deleteSelectedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteSelectedTasks()" style="display: none;">删除选中</button>
-                        <button id="deleteFailedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteFailedTasks()">清除失败</button>
-                        <button id="clearAllBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="clearAllTasks()">清除所有</button>
-                        <button id="page-prev" class="geist-button-outline text-xs px-3" onclick="goPrevPage()">上一页</button>
-                        <button id="page-next" class="geist-button-outline text-xs px-3" onclick="goNextPage()">下一页</button>
-                        <select id="page-size" class="geist-input h-[30px]" onchange="changePageSize()">
-                            <option value="10">10 / 页</option>
-                            <option value="20" selected>20 / 页</option>
-                            <option value="50">50 / 页</option>
-                        </select>
-                    </div>
+
+                <div>
+                  <label class="block text-sm font-medium mb-2">分辨率</label>
+                  <select id="resolution" name="resolution" class="geist-input">
+                    <option value="480p" selected>480p</option>
+                    <option value="720p">720p</option>
+                  </select>
                 </div>
-            </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">风格预设</label>
+                <select id="preset" name="preset" class="geist-input">
+                  <option value="fun">有趣 (Fun)</option>
+                  <option value="normal" selected>正常 (Normal)</option>
+                  <option value="spicy">刺激 (Spicy)</option>
+                  <option value="custom">自定义 (Custom)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">图片 URL（可选，用于图片转视频）</label>
+                <input type="url" id="imageUrl" name="image_url" 
+                  class="geist-input" 
+                  placeholder="https://example.com/image.jpg">
+              </div>
+
+              <button type="submit" class="geist-button w-full">创建任务</button>
+            </form>
+          </div>
         </div>
 
-        <div id="taskModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>任务详情</h3>
-                    <button class="close-btn" onclick="closeModal()">&times;</button>
-                </div>
-                <div class="modal-body" id="modalBody">
-                </div>
+        <div class="rounded-lg overflow-hidden bg-white border border-[var(--border)]">
+          <div class="px-6 py-4 border-b border-[var(--border)] flex justify-between items-center">
+            <h3 class="text-lg font-semibold">任务列表</h3>
+            <button id="refreshBtn" class="geist-button-outline text-sm">刷新</button>
+          </div>
+          <div class="px-6 py-3 border-b border-[var(--border)] bg-[var(--accents-1)]">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="checkbox">
+              <span>全选</span>
+            </label>
+          </div>
+          <div id="taskList" class="min-h-[300px]">
+            <div class="table-empty">暂无任务</div>
+          </div>
+          
+          <div class="pagination-bar">
+            <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
+            <div class="flex items-center gap-2">
+              <button class="geist-button-outline text-xs px-3" onclick="selectVisibleAll()">全选本页</button>
+              <button class="geist-button-outline text-xs px-3" onclick="selectAllFiltered()">全选全部</button>
+              <button class="geist-button-outline text-xs px-3" onclick="clearAllSelection()">取消全选</button>
+              <button id="deleteSelectedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteSelectedTasks()" style="display: none;">删除选中</button>
+              <button id="deleteFailedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteFailedTasks()">清除失败</button>
+              <button id="clearAllBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="clearAllTasks()">清除所有</button>
+              <button id="page-prev" class="geist-button-outline text-xs px-3" onclick="goPrevPage()">上一页</button>
+              <button id="page-next" class="geist-button-outline text-xs px-3" onclick="goNextPage()">下一页</button>
+              <select id="page-size" class="geist-input h-[30px]" onchange="changePageSize()">
+                <option value="10">10 / 页</option>
+                <option value="20" selected>20 / 页</option>
+                <option value="50">50 / 页</option>
+              </select>
             </div>
+          </div>
         </div>
+      </div>
     </div>
+  </main>
 
-    <script src="/static/video/video.js"></script>
+  <div id="app-footer"></div>
+
+  <div id="taskModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>任务详情</h3>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common/header.js"></script>
+  <script src="/static/video/video.js"></script>
 </body>
 </html>
