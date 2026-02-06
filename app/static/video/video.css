@@ -131,7 +131,11 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 4px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: #fafafa;
+    flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .geist-button-outline {

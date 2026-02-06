@@ -118,13 +118,13 @@
               <span>全选</span>
             </label>
           </div>
-          <div id="taskList" class="min-h-[300px]">
+          <div id="taskList" class="min-h-[300px] flex-1 overflow-y-auto">
             <div class="table-empty">暂无任务</div>
           </div>
           
           <div class="pagination-bar">
             <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <button class="geist-button-outline text-xs px-3" onclick="selectVisibleAll()">全选本页</button>
               <button class="geist-button-outline text-xs px-3" onclick="selectAllFiltered()">全选全部</button>
               <button class="geist-button-outline text-xs px-3" onclick="clearAllSelection()">取消全选</button>
