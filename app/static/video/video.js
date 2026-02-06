@@ -81,8 +81,8 @@ function renderTask(task) {
                 <div class="task-info">
                     <div class="task-progress">
                         <div>进度: ${progressWidth}%</div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${progressWidth}%"></div>
+                        <div class="task-progress-bar">
+                            <div class="task-progress-bar-fill" style="width: ${progressWidth}%"></div>
                         </div>
                     </div>
                     <div>创建: ${formatTimestamp(task.created_at)}</div>
