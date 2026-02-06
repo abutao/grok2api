@@ -305,9 +305,12 @@ header h1 {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 12px;
+    padding: 16px 24px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .geist-button-outline {

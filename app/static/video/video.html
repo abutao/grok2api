@@ -95,25 +95,25 @@
                 <div id="taskList" class="task-list">
                     <div class="empty-state">暂无任务</div>
                 </div>
-                
-                <div class="pagination-bar">
-                    <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
-                    <div class="flex items-center gap-2">
-                        <button class="geist-button-outline text-xs px-3" onclick="selectVisibleAll()">全选本页</button>
-                        <button class="geist-button-outline text-xs px-3" onclick="selectAllFiltered()">全选全部</button>
-                        <button class="geist-button-outline text-xs px-3" onclick="clearAllSelection()">取消全选</button>
-                        <button id="deleteSelectedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteSelectedTasks()" style="display: none;">删除选中</button>
-                        <button id="deleteFailedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteFailedTasks()">清除失败</button>
-                        <button id="clearAllBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="clearAllTasks()">清除所有</button>
-                        <button id="page-prev" class="geist-button-outline text-xs px-3" onclick="goPrevPage()">上一页</button>
-                        <button id="page-next" class="geist-button-outline text-xs px-3" onclick="goNextPage()">下一页</button>
-                        <select id="page-size" class="geist-input h-[30px]" onchange="changePageSize()">
-                            <option value="10">10 / 页</option>
-                            <option value="20" selected>20 / 页</option>
-                            <option value="50">50 / 页</option>
-                        </select>
-                    </div>
-                </div>
+            </div>
+        </div>
+
+        <div class="pagination-bar">
+            <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
+            <div class="flex items-center gap-2">
+                <button class="geist-button-outline text-xs px-3" onclick="selectVisibleAll()">全选本页</button>
+                <button class="geist-button-outline text-xs px-3" onclick="selectAllFiltered()">全选全部</button>
+                <button class="geist-button-outline text-xs px-3" onclick="clearAllSelection()">取消全选</button>
+                <button id="deleteSelectedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteSelectedTasks()" style="display: none;">删除选中</button>
+                <button id="deleteFailedBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="deleteFailedTasks()">清除失败</button>
+                <button id="clearAllBtn" class="geist-button-outline text-xs px-3 text-red-600" onclick="clearAllTasks()">清除所有</button>
+                <button id="page-prev" class="geist-button-outline text-xs px-3" onclick="goPrevPage()">上一页</button>
+                <button id="page-next" class="geist-button-outline text-xs px-3" onclick="goNextPage()">下一页</button>
+                <select id="page-size" class="geist-input h-[30px]" onchange="changePageSize()">
+                    <option value="10">10 / 页</option>
+                    <option value="20" selected>20 / 页</option>
+                    <option value="50">50 / 页</option>
+                </select>
             </div>
         </div>
 
