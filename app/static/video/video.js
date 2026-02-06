@@ -122,6 +122,11 @@ async function loadTasks() {
         const data = await listTasks();
         tasks = data.tasks || [];
         renderTasks();
+        
+        const hasRunningTasks = tasks.some(t => t.status === 'running' || t.status === 'pending');
+        if (hasRunningTasks && !refreshInterval) {
+            startAutoRefresh();
+        }
     } catch (error) {
         console.error('加载任务失败:', error);
         alert('加载任务失败: ' + error.message);
@@ -159,6 +164,7 @@ async function handleCreateTask(event) {
         alert(`任务创建成功！\n任务 ID: ${result.task_id}`);
         form.reset();
         await loadTasks();
+        startAutoRefresh();
     } catch (error) {
         console.error('创建任务失败:', error);
         alert('创建任务失败: ' + error.message);
@@ -398,16 +404,24 @@ async function clearAllTasks() {
 }
 
 function startAutoRefresh() {
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-    }
+    stopAutoRefresh();
     
     refreshInterval = setInterval(async () => {
         const hasRunningTasks = tasks.some(t => t.status === 'running' || t.status === 'pending');
+        
         if (hasRunningTasks) {
             await loadTasks();
+        } else {
+            stopAutoRefresh();
         }
     }, 2000);
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -418,7 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('clearAllBtn').addEventListener('click', clearAllTasks);
     
     loadTasks();
-    startAutoRefresh();
     
     window.addEventListener('click', (event) => {
         const modal = document.getElementById('taskModal');
