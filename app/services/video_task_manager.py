@@ -96,19 +96,25 @@ class VideoTaskManager:
             final_image_url = task.image_url
 
             if task.image_url:
-                logger.info(f"Processing external image URL: {task.image_url}")
+                logger.info(f"Processing image URL: {task.image_url}")
                 
                 if not task.image_url.startswith("https://assets.grok.com/"):
-                    logger.info(f"Image is not from Grok, uploading to Grok server...")
+                    logger.info(f"Image is from external URL, uploading to Grok server...")
                     from app.services.grok.services.assets import UploadService
                     
                     upload_service = UploadService()
                     try:
                         file_id, file_uri = await upload_service.upload(task.image_url, token)
                         final_image_url = f"https://assets.grok.com/{file_uri}"
-                        logger.info(f"Image uploaded to Grok: {final_image_url}")
+                        logger.info(f"Image uploaded to Grok successfully: {final_image_url}")
+                    except Exception as e:
+                        logger.error(f"Failed to upload image to Grok: {e}", exc_info=True)
+                        task.fail(f"Upload authentication failed: {e}")
+                        return
                     finally:
                         await upload_service.close()
+                else:
+                    logger.info(f"Image is from Grok, using it directly: {task.image_url}")
 
                 logger.info(f"Generating video from image: {final_image_url}")
                 response = await service.generate_from_image(
