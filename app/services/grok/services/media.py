@@ -8,6 +8,8 @@ from typing import AsyncGenerator, Optional
 import orjson
 from curl_cffi.requests import AsyncSession
 
+import httpx
+
 from app.core.logger import logger
 from app.core.config import get_config
 from app.core.exceptions import (
@@ -83,6 +85,33 @@ class VideoService:
         """构建代理"""
         return {"http": self.proxy, "https": self.proxy} if self.proxy else None
 
+    async def _create_post_httpx(
+        self, headers: dict, payload: dict, media_type: str
+    ) -> str:
+        """使用 httpx 创建媒体帖子（curl_cffi TLS 失败时的回退）"""
+        proxy = self._build_proxies()
+        transport = None
+        if proxy and proxy.get("https"):
+            transport = httpx.AsyncHTTPTransport(proxy=proxy["https"])
+        async with httpx.AsyncClient(
+            timeout=30, transport=transport, verify=True
+        ) as client:
+            response = await client.post(
+                CREATE_POST_API,
+                headers=headers,
+                json=payload,
+            )
+        if response.status_code != 200:
+            raise UpstreamException(
+                f"Failed to create post: {response.status_code}"
+            )
+        data = response.json()
+        post_id = (data.get("post") or {}).get("id", "")
+        if not post_id:
+            raise UpstreamException("No post ID in response")
+        logger.info(f"Media post created (httpx): {post_id} (type={media_type})")
+        return post_id
+
     async def create_post(
         self,
         token: str,
@@ -91,15 +120,13 @@ class VideoService:
         media_url: str = None,
     ) -> str:
         """创建媒体帖子，返回 post ID"""
+        headers = self._build_headers(token)
+        if media_type == "MEDIA_POST_TYPE_IMAGE" and media_url:
+            payload = {"mediaType": media_type, "mediaUrl": media_url}
+        else:
+            payload = {"mediaType": media_type, "prompt": prompt}
+
         try:
-            headers = self._build_headers(token)
-
-            # 根据类型构建不同的载荷
-            if media_type == "MEDIA_POST_TYPE_IMAGE" and media_url:
-                payload = {"mediaType": media_type, "mediaUrl": media_url}
-            else:
-                payload = {"mediaType": media_type, "prompt": prompt}
-
             async with AsyncSession() as session:
                 response = await session.post(
                     CREATE_POST_API,
@@ -126,6 +153,14 @@ class VideoService:
         except AppException:
             raise
         except Exception as e:
+            err_str = str(e).lower()
+            if "35" in err_str or "tls" in err_str or "ssl" in err_str or "curl" in err_str:
+                logger.warning(f"Create post curl/SSL error, retry with httpx: {e}")
+                try:
+                    return await self._create_post_httpx(headers, payload, media_type)
+                except Exception as e2:
+                    logger.error(f"Create post error (httpx fallback): {e2}")
+                    raise UpstreamException(f"Create post error: {str(e2)}")
             logger.error(f"Create post error: {e}")
             raise UpstreamException(f"Create post error: {str(e)}")
 
@@ -185,6 +220,39 @@ class VideoService:
 
         return payload
 
+    def _is_tls_or_curl_error(self, e: Exception) -> bool:
+        s = str(e).lower()
+        return "35" in s or "tls" in s or "ssl" in s or "curl" in s
+
+    async def _generate_internal_httpx(
+        self,
+        headers: dict,
+        payload: dict,
+        post_id: str,
+    ) -> AsyncGenerator[bytes, None]:
+        """使用 httpx 流式请求（curl TLS 失败时的回退）"""
+        proxy = self._build_proxies()
+        transport = None
+        if proxy and proxy.get("https"):
+            transport = httpx.AsyncHTTPTransport(proxy=proxy["https"])
+        async with httpx.AsyncClient(
+            timeout=self.timeout, transport=transport, verify=True
+        ) as client:
+            async with client.stream(
+                "POST",
+                CHAT_API,
+                headers=headers,
+                content=orjson.dumps(payload),
+            ) as response:
+                if response.status_code != 200:
+                    raise UpstreamException(
+                        message=f"Video generation failed: {response.status_code}",
+                        details={"status": response.status_code},
+                    )
+                logger.info(f"Video generation started (httpx): post_id={post_id}")
+                async for line in response.aiter_lines():
+                    yield line
+
     async def _generate_internal(
         self,
         token: str,
@@ -196,13 +264,12 @@ class VideoService:
         preset: str,
     ) -> AsyncGenerator[bytes, None]:
         """内部生成逻辑"""
+        headers = self._build_headers(token)
+        payload = self._build_payload(
+            prompt, post_id, aspect_ratio, video_length, resolution_name, preset
+        )
         session = None
         try:
-            headers = self._build_headers(token)
-            payload = self._build_payload(
-                prompt, post_id, aspect_ratio, video_length, resolution_name, preset
-            )
-
             session = AsyncSession(impersonate=get_config("security.browser"))
             response = await session.post(
                 CHAT_API,
@@ -231,7 +298,9 @@ class VideoService:
                 finally:
                     await session.close()
 
-            return stream_response()
+            async for chunk in stream_response():
+                yield chunk
+            return
 
         except Exception as e:
             if session:
@@ -239,6 +308,21 @@ class VideoService:
                     await session.close()
                 except Exception:
                     pass
+            if self._is_tls_or_curl_error(e):
+                logger.warning(
+                    f"Video generation curl/SSL error, retry with httpx: {e}"
+                )
+                try:
+                    async for line in self._generate_internal_httpx(
+                        headers, payload, post_id
+                    ):
+                        yield line
+                    return
+                except Exception as e2:
+                    logger.error(f"Video generation error (httpx fallback): {e2}")
+                    raise UpstreamException(
+                        f"Video generation error: {str(e2)}"
+                    )
             logger.error(f"Video generation error: {e}")
             if isinstance(e, AppException):
                 raise
@@ -259,7 +343,7 @@ class VideoService:
         )
         async with _get_semaphore():
             post_id = await self.create_post(token, prompt)
-            return await self._generate_internal(
+            async for chunk in self._generate_internal(
                 token,
                 post_id,
                 prompt,
@@ -267,7 +351,8 @@ class VideoService:
                 video_length,
                 resolution_name,
                 preset,
-            )
+            ):
+                yield chunk
 
     async def generate_from_image(
         self,
@@ -285,9 +370,10 @@ class VideoService:
         )
         async with _get_semaphore():
             post_id = await self.create_image_post(token, image_url)
-            return await self._generate_internal(
+            async for chunk in self._generate_internal(
                 token, post_id, prompt, aspect_ratio, video_length, resolution, preset
-            )
+            ):
+                yield chunk
 
     @staticmethod
     async def completions(
@@ -299,8 +385,9 @@ class VideoService:
         video_length: int = 6,
         resolution: str = "480p",
         preset: str = "normal",
+        progress_callback=None,
     ):
-        """视频生成入口"""
+        """视频生成入口。progress_callback(progress: int, result: dict|None) 用于异步任务进度与结果。"""
         # 获取 token（使用智能路由）
         token_mgr = await get_token_manager()
         await token_mgr.reload_if_stale()
@@ -355,17 +442,19 @@ class VideoService:
         # 生成视频
         service = VideoService()
         if image_url:
-            response = await service.generate_from_image(
+            response = service.generate_from_image(
                 token, prompt, image_url, aspect_ratio, video_length, resolution, preset
             )
         else:
-            response = await service.generate(
+            response = service.generate(
                 token, prompt, aspect_ratio, video_length, resolution, preset
             )
 
         # 处理响应
         if is_stream:
-            processor = VideoStreamProcessor(model, token, think)
+            processor = VideoStreamProcessor(
+                model, token, think, on_progress=progress_callback
+            )
             return wrap_stream_with_usage(
                 processor.process(response), token_mgr, token, model
             )

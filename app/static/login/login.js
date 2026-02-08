@@ -21,7 +21,8 @@ async function login() {
     const ok = await requestLogin(input);
     if (ok) {
       await storeAppKey(input);
-      window.location.href = '/admin/token';
+      var from = new URLSearchParams(window.location.search).get('from');
+      window.location.href = (from && from.startsWith('/')) ? from : '/admin/token';
     } else {
       showToast('密钥无效', 'error');
     }
@@ -36,7 +37,10 @@ async function login() {
   if (!existingKey) return;
   try {
     const ok = await requestLogin(existingKey);
-    if (ok) window.location.href = '/admin/token';
+    if (ok) {
+      var from = new URLSearchParams(window.location.search).get('from');
+      window.location.href = (from && from.startsWith('/')) ? from : '/admin/token';
+    }
   } catch (e) {
     return;
   }

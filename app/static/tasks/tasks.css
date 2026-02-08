@@ -1,0 +1,70 @@
+.task-form-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.task-prompt-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.job-type-video { color: #0ea5e9; }
+.job-type-image { color: #8b5cf6; }
+.job-status-pending { color: var(--accents-4); }
+.job-status-running { color: var(--success); }
+.job-status-completed { color: var(--success); }
+.job-status-failed { color: var(--error); }
+
+.job-result-preview {
+  max-width: 280px;
+  max-height: 120px;
+  word-break: break-all;
+  font-size: 11px;
+  color: var(--accents-6);
+}
+
+.job-result-preview img {
+  max-width: 120px;
+  max-height: 80px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.job-request-preview {
+  font-size: 11px;
+  color: var(--accents-5);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#batch-actions {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+#batch-actions.batch-actions-vertical {
+  min-width: 5rem;
+}
+
+#batch-actions .geist-button-outline:hover {
+  background: #f3f4f6;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  display: inline-block;
+}
+
+.toolbar-sep-vertical {
+  width: 100%;
+  min-width: 2rem;
+  height: 1px;
+}

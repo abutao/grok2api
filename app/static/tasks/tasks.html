@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - 测试任务</title>
+  <link rel="icon" href="/static/favicon/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="/static/common/common.css?v=3" rel="stylesheet">
+  <link href="/static/tasks/tasks.css?v=1" rel="stylesheet">
+  <link href="/static/common/toast.css" rel="stylesheet">
+</head>
+
+<body class="min-h-screen flex flex-col" style="background-color: var(--bg);">
+
+  <div id="app-header"></div>
+
+  <main class="space-y-8 flex-1 container mx-auto max-w-5xl px-6 py-8 fade-in">
+    <div class="flex justify-between items-center">
+      <div>
+        <h2 class="text-2xl font-semibold tracking-tight">测试任务</h2>
+        <p class="text-[var(--accents-4)] mt-1 text-sm">提交视频/图片异步任务，并查看所有通过 API 提交的任务列表（状态、提交内容、结果）。</p>
+      </div>
+    </div>
+
+    <div class="h-px bg-[var(--border)]"></div>
+
+    <div id="tasks-api-key-block" class="rounded-lg border border-[var(--border)] bg-[var(--accents-1)]/30 px-4 py-3">
+      <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">API Key（与工具/客户端调用接口时使用的 Key 一致）</label>
+      <input type="password" id="tasks-api-key" class="geist-input w-full max-w-xl font-mono text-sm" placeholder="填写 config 中的 api_key，用于提交任务与查看列表" autocomplete="off" />
+    </div>
+    <p id="tasks-api-key-auto-hint" class="text-sm text-[var(--accents-5)] hidden py-1">已使用配置中的 API Key</p>
+
+    <!-- 提交任务 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div class="task-form-card">
+        <h3 class="text-lg font-semibold mb-4">提交视频任务</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">模型</label>
+            <select id="video-model" class="geist-input w-full">
+              <option value="grok-imagine-1.0-video">grok-imagine-1.0-video</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">描述（prompt）</label>
+            <textarea id="video-prompt" class="geist-input w-full task-prompt-input" rows="4" placeholder="一只猫在跑步"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">参考图 URL（选填，图生视频）</label>
+            <input type="url" id="video-reference-image" class="geist-input w-full" placeholder="https://example.com/image.jpg" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">比例 aspect_ratio</label>
+              <select id="video-aspect" class="geist-input w-full">
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">时长 video_length(秒)</label>
+              <select id="video-length" class="geist-input w-full">
+                <option value="6">6</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">分辨率 resolution</label>
+              <select id="video-resolution" class="geist-input w-full">
+                <option value="480p">480p</option>
+                <option value="720p">720p</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">风格预设 preset</label>
+              <select id="video-preset" class="geist-input w-full">
+                <option value="custom">custom</option>
+                <option value="fun">fun</option>
+                <option value="normal">normal</option>
+                <option value="spicy">spicy</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" onclick="submitVideo()" class="geist-button w-full">提交视频任务</button>
+        </div>
+      </div>
+
+      <div class="task-form-card">
+        <h3 class="text-lg font-semibold mb-4">提交图片任务</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">模型</label>
+            <select id="image-model" class="geist-input w-full">
+              <option value="grok-imagine-1.0">grok-imagine-1.0</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">描述（prompt）</label>
+            <textarea id="image-prompt" class="geist-input w-full task-prompt-input" rows="4" placeholder="一只在太空的猫"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">数量 n</label>
+              <input type="number" id="image-n" class="geist-input w-full" min="1" max="10" value="1" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">尺寸 size</label>
+              <select id="image-size" class="geist-input w-full">
+                <option value="1024x1024">1024×1024 (1:1)</option>
+                <option value="1024x576">1024×576 (16:9)</option>
+                <option value="576x1024">576×1024 (9:16)</option>
+                <option value="1024x1536">1024×1536 (2:3)</option>
+                <option value="1536x1024">1536×1024 (3:2)</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="2:3">2:3</option>
+                <option value="3:2">3:2</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-[var(--accents-6)] mb-1">响应格式 response_format</label>
+              <select id="image-format" class="geist-input w-full">
+                <option value="url">url</option>
+                <option value="b64_json">b64_json</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" onclick="submitImage()" class="geist-button w-full">提交图片任务</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div>
+      <h3 class="text-lg font-semibold mb-4">任务列表（API 提交的所有任务）</h3>
+      <div class="border border-[var(--border)] rounded-lg overflow-hidden bg-white">
+        <div id="jobs-table-wrap" class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-[var(--border)] bg-[var(--accents-1)]">
+                <th class="text-left py-3 px-4 w-10">
+                  <input type="checkbox" id="select-all-jobs" class="rounded border-[var(--border)]" title="全选" />
+                </th>
+                <th class="text-left py-3 px-4 font-medium">类型</th>
+                <th class="text-left py-3 px-4 font-medium">job_id</th>
+                <th class="text-left py-3 px-4 font-medium">状态</th>
+                <th class="text-left py-3 px-4 font-medium">进度</th>
+                <th class="text-left py-3 px-4 font-medium">提交内容</th>
+                <th class="text-left py-3 px-4 font-medium">结果 / 错误</th>
+                <th class="text-left py-3 px-4 font-medium">创建时间</th>
+                <th class="text-left py-3 px-4 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody id="jobs-tbody">
+              <tr><td colspan="8" class="py-8 text-center text-[var(--accents-4)]">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 左侧竖向批量操作栏，不遮挡任务列表 -->
+  <div id="batch-actions"
+    class="batch-actions-vertical fixed left-4 top-1/2 -translate-y-1/2 z-20 bg-white border border-[var(--border)] rounded-xl px-2 py-3 flex flex-col items-center shadow-lg gap-2 cursor-move select-none active:cursor-grabbing whitespace-nowrap">
+    <div class="text-sm font-medium flex items-center gap-1.5">
+      <span class="text-[var(--accents-5)] text-xs">已选</span>
+      <span class="bg-black text-white text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center" id="selected-count">0</span>
+      <span class="text-[var(--accents-5)] text-xs">项</span>
+    </div>
+    <span class="toolbar-sep toolbar-sep-vertical"></span>
+    <div class="flex flex-col items-stretch w-full gap-1">
+      <button type="button" onclick="loadJobs()"
+        class="geist-button-outline text-xs px-3 py-1.5 border-0 hover:bg-gray-100 w-full">
+        刷新
+      </button>
+      <button type="button" id="btn-batch-delete" onclick="batchDeleteSelected()"
+        class="geist-button-outline text-xs px-3 py-1.5 border-0 hover:bg-gray-100 text-[var(--error)] hover:border-[var(--error)] w-full"
+        disabled>
+        删除
+      </button>
+      <button type="button" onclick="clearAllJobs()" class="geist-button-danger text-xs px-3 py-1.5 w-full">
+        清理全部
+      </button>
+    </div>
+  </div>
+
+  <script src="/static/common/admin-auth.js?v=2"></script>
+  <script src="/static/common/header.js?v=6"></script>
+  <script src="/static/common/toast.js"></script>
+  <script src="/static/tasks/tasks.js?v=1"></script>
+</body>
+
+</html>

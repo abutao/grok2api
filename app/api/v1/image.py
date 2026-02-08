@@ -11,7 +11,8 @@ import time
 from pathlib import Path
 from typing import List, Optional, Union
 
-from fastapi import APIRouter, File, Form, UploadFile
+import orjson
+from fastapi import APIRouter, File, Form, UploadFile, Request, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
@@ -30,6 +31,11 @@ from app.services.token import get_token_manager, EffortType
 from app.core.exceptions import ValidationException, AppException, ErrorType
 from app.core.config import get_config
 from app.core.logger import logger
+from app.core.image_jobs import (
+    create_image_job,
+    get_image_job,
+    expire_image_job,
+)
 
 
 router = APIRouter(tags=["Images"])
@@ -288,6 +294,120 @@ async def call_grok(
                 logger.warning(f"Failed to consume token: {e}")
 
 
+async def _generate_images_response(request: ImageGenerationRequest) -> dict:
+    """执行非流式图片生成，返回与 OpenAI 兼容的响应 dict。供同步接口与异步任务共用。"""
+    if request.response_format is None:
+        request.response_format = resolve_response_format(None)
+    if request.response_format == "base64":
+        request.response_format = "b64_json"
+    response_format = resolve_response_format(request.response_format)
+    response_field = response_field_name(response_format)
+    token_mgr, token = await _get_token(request.model)
+    model_info = ModelService.get(request.model)
+    use_ws = bool(get_config("image.image_ws"))
+    n = request.n
+    usage_override = None
+
+    if use_ws:
+        aspect_ratio = resolve_aspect_ratio(request.size)
+        enable_nsfw = bool(get_config("image.image_ws_nsfw"))
+        all_images = []
+        seen = set()
+        expected_per_call = 6
+        calls_needed = max(1, math.ceil(n / expected_per_call))
+        calls_needed = min(calls_needed, n)
+
+        async def _fetch_batch(call_target: int):
+            upstream = image_service.stream(
+                token=token,
+                prompt=request.prompt,
+                aspect_ratio=aspect_ratio,
+                n=call_target,
+                enable_nsfw=enable_nsfw,
+            )
+            processor = ImageWSCollectProcessor(
+                model_info.model_id,
+                token,
+                n=call_target,
+                response_format=response_format,
+            )
+            return await processor.process(upstream)
+
+        tasks = []
+        for i in range(calls_needed):
+            remaining = n - (i * expected_per_call)
+            call_target = min(expected_per_call, remaining)
+            tasks.append(_fetch_batch(call_target))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for batch in results:
+            if isinstance(batch, Exception):
+                logger.warning(f"WS batch failed: {batch}")
+                continue
+            for img in batch:
+                if img not in seen:
+                    seen.add(img)
+                    all_images.append(img)
+                if len(all_images) >= n:
+                    break
+            if len(all_images) >= n:
+                break
+        try:
+            await token_mgr.consume(token, _get_effort(model_info))
+        except Exception as e:
+            logger.warning(f"Failed to consume token: {e}")
+        usage_override = {
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_tokens_details": {"text_tokens": 0, "image_tokens": 0},
+        }
+    else:
+        calls_needed = (n + 1) // 2
+        if calls_needed == 1:
+            all_images = await call_grok(
+                token_mgr,
+                token,
+                f"Image Generation: {request.prompt}",
+                model_info,
+                response_format=response_format,
+            )
+        else:
+            tasks = [
+                call_grok(
+                    token_mgr,
+                    token,
+                    f"Image Generation: {request.prompt}",
+                    model_info,
+                    response_format=response_format,
+                )
+                for _ in range(calls_needed)
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            all_images = []
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(f"Concurrent call failed: {result}")
+                elif isinstance(result, list):
+                    all_images.extend(result)
+
+    if len(all_images) >= n:
+        selected_images = random.sample(all_images, n)
+    else:
+        selected_images = all_images.copy()
+        while len(selected_images) < n:
+            selected_images.append("error")
+
+    data = [{response_field: img} for img in selected_images]
+    usage = usage_override or {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "input_tokens_details": {"text_tokens": 0, "image_tokens": 0},
+    }
+    return {"created": int(time.time()), "data": data, "usage": usage}
+
+
 @router.post("/images/generations")
 async def create_image(request: ImageGenerationRequest):
     """
@@ -371,122 +491,105 @@ async def create_image(request: ImageGenerationRequest):
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
-    # 非流式模式
-    n = request.n
+    # 非流式模式：复用共用逻辑
+    result = await _generate_images_response(request)
+    return JSONResponse(content=result)
 
-    usage_override = None
-    if use_ws:
-        aspect_ratio = resolve_aspect_ratio(request.size)
-        enable_nsfw = bool(get_config("image.image_ws_nsfw"))
-        all_images = []
-        seen = set()
-        expected_per_call = 6
-        calls_needed = max(1, math.ceil(n / expected_per_call))
-        calls_needed = min(calls_needed, n)
 
-        async def _fetch_batch(call_target: int):
-            upstream = image_service.stream(
-                token=token,
-                prompt=request.prompt,
-                aspect_ratio=aspect_ratio,
-                n=call_target,
-                enable_nsfw=enable_nsfw,
-            )
-            processor = ImageWSCollectProcessor(
-                model_info.model_id,
-                token,
-                n=call_target,
-                response_format=response_format,
-            )
-            return await processor.process(upstream)
+def _image_sse_event(payload: dict) -> str:
+    return f"data: {orjson.dumps(payload).decode()}\n\n"
 
-        tasks = []
-        for i in range(calls_needed):
-            remaining = n - (i * expected_per_call)
-            call_target = min(expected_per_call, remaining)
-            tasks.append(_fetch_batch(call_target))
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for batch in results:
-            if isinstance(batch, Exception):
-                logger.warning(f"WS batch failed: {batch}")
-                continue
-            for img in batch:
-                if img not in seen:
-                    seen.add(img)
-                    all_images.append(img)
-                if len(all_images) >= n:
-                    break
-            if len(all_images) >= n:
-                break
-        try:
-            await token_mgr.consume(token, _get_effort(model_info))
-        except Exception as e:
-            logger.warning(f"Failed to consume token: {e}")
-        usage_override = {
-            "total_tokens": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "input_tokens_details": {"text_tokens": 0, "image_tokens": 0},
-        }
-    else:
-        calls_needed = (n + 1) // 2
+@router.post("/images/generations/async")
+async def create_image_async(request: Request):
+    """
+    异步提交图片生成任务。
+    请求体与 POST /v1/images/generations 一致（不含 stream 或 stream=false）。
+    立即返回 job_id，通过 GET /v1/images/jobs/{job_id} 或 GET /v1/images/jobs/{job_id}/stream 查询结果。
+    """
+    body = await request.json()
+    try:
+        req = ImageGenerationRequest.model_validate(body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
-        if calls_needed == 1:
-            # 单次调用
-            all_images = await call_grok(
-                token_mgr,
-                token,
-                f"Image Generation: {request.prompt}",
-                model_info,
-                response_format=response_format,
-            )
-        else:
-            # 并发调用
-            tasks = [
-                call_grok(
-                    token_mgr,
-                    token,
-                    f"Image Generation: {request.prompt}",
-                    model_info,
-                    response_format=response_format,
-                )
-                for _ in range(calls_needed)
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+    if req.stream:
+        req.stream = False
+    validate_generation_request(req)
+    if req.response_format is None:
+        req.response_format = resolve_response_format(None)
+    if req.response_format == "base64":
+        req.response_format = "b64_json"
 
-            # 收集成功的图片
-            all_images = []
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error(f"Concurrent call failed: {result}")
-                elif isinstance(result, list):
-                    all_images.extend(result)
-
-    # 随机选取 n 张图片
-    if len(all_images) >= n:
-        selected_images = random.sample(all_images, n)
-    else:
-        # 全部返回，error 填充缺失
-        selected_images = all_images.copy()
-        while len(selected_images) < n:
-            selected_images.append("error")
-
-    # 构建响应
-    data = [{response_field: img} for img in selected_images]
-    usage = usage_override or {
-        "total_tokens": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "input_tokens_details": {"text_tokens": 0, "image_tokens": 0},
+    job = create_image_job()
+    job.request_payload = {
+        "prompt": req.prompt,
+        "model": req.model,
+        "n": req.n,
+        "size": getattr(req, "size", None),
+        "response_format": req.response_format,
     }
 
-    return JSONResponse(
-        content={
-            "created": int(time.time()),
-            "data": data,
-            "usage": usage,
-        }
+    async def run_image() -> None:
+        job.set_running(0)
+        try:
+            result = await _generate_images_response(req)
+            job.finish(result)
+        except Exception as e:
+            logger.exception("Image async job failed: %s", e)
+            job.fail(str(e))
+        finally:
+            asyncio.create_task(expire_image_job(job.id, 3600))
+
+    asyncio.create_task(run_image())
+    return {
+        "job_id": job.id,
+        "status": "pending",
+        "message": "Image generation started. Poll GET /v1/images/jobs/{job_id} or GET /v1/images/jobs/{job_id}/stream for result.",
+    }
+
+
+@router.get("/images/jobs/{job_id}")
+async def get_image_job_status(job_id: str):
+    """轮询查询图片任务状态与结果。"""
+    job = get_image_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job.snapshot()
+
+
+@router.get("/images/jobs/{job_id}/stream")
+async def stream_image_job_progress(job_id: str):
+    """SSE 流式获取图片任务进度与结果。"""
+    job = get_image_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    async def event_stream():
+        queue = job.attach()
+        try:
+            yield _image_sse_event({"type": "snapshot", **job.snapshot()})
+            if job.status in ("completed", "failed"):
+                return
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=20)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    if job.status in ("completed", "failed"):
+                        yield _image_sse_event({"type": job.status, **job.snapshot()})
+                        return
+                    continue
+                yield _image_sse_event(event)
+                if event.get("type") in ("completed", "failed"):
+                    return
+        finally:
+            job.detach(queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 

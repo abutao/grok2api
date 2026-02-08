@@ -153,6 +153,22 @@ async function ensureApiKey() {
   }
 }
 
+/** 尝试获取 API Key，不跳转；无登录或失败时返回 null */
+async function tryGetApiKeyQuiet() {
+  const appKey = await getStoredAppKey();
+  if (!appKey) return null;
+  try {
+    return await requestApiKey(appKey);
+  } catch (e) {
+    return null;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.ensureApiKey = ensureApiKey;
+  window.tryGetApiKeyQuiet = tryGetApiKeyQuiet;
+}
+
 function buildAuthHeaders(apiKey) {
   return apiKey ? { 'Authorization': apiKey } : {};
 }

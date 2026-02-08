@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from app.core.auth import verify_api_key, verify_app_key, get_admin_api_key
 from app.core.config import config, get_config
 from app.core.batch_tasks import create_task, get_task, expire_task
+from app.core.video_jobs import list_all_video_jobs, get_video_job, delete_video_job, clear_all_video_jobs
+from app.core.image_jobs import list_all_image_jobs, get_image_job, delete_image_job, clear_all_image_jobs
 from app.core.storage import get_storage, LocalStorage, RedisStorage, SQLStorage
 from app.core.exceptions import AppException
 from app.services.token.manager import get_token_manager
@@ -1183,6 +1185,54 @@ async def enable_nsfw_api_async(data: dict):
 async def admin_cache_page():
     """缓存管理页"""
     return await render_template("cache/cache.html")
+
+
+@router.get("/admin/tasks", response_class=HTMLResponse, include_in_schema=False)
+async def admin_tasks_page():
+    """测试任务页：提交视频/图片任务并查看任务列表"""
+    return await render_template("tasks/tasks.html")
+
+
+@router.get("/api/v1/admin/tasks/jobs", dependencies=[Depends(verify_api_key)])
+async def get_tasks_jobs_list():
+    """获取所有异步任务列表（视频+图片），按创建时间倒序"""
+    video = list_all_video_jobs()
+    image = list_all_image_jobs()
+    combined = video + image
+    combined.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"jobs": combined}
+
+
+@router.get("/api/v1/admin/tasks/jobs/{job_id}", dependencies=[Depends(verify_api_key)])
+async def get_task_job(job_id: str):
+    """获取单个任务详情（视频或图片），未找到返回 404"""
+    job = get_video_job(job_id)
+    if job:
+        return job
+    job = get_image_job(job_id)
+    if job:
+        return job
+    raise HTTPException(status_code=404, detail="Job not found")
+
+
+@router.delete("/api/v1/admin/tasks/jobs/{job_id}", dependencies=[Depends(verify_api_key)])
+async def delete_task_job(job_id: str):
+    """删除单个任务（视频或图片），未找到返回 404"""
+    if get_video_job(job_id):
+        delete_video_job(job_id)
+        return {"status": "success", "type": "video"}
+    if get_image_job(job_id):
+        delete_image_job(job_id)
+        return {"status": "success", "type": "image"}
+    raise HTTPException(status_code=404, detail="Job not found")
+
+
+@router.post("/api/v1/admin/tasks/jobs/clear", dependencies=[Depends(verify_api_key)])
+async def clear_all_task_jobs():
+    """清空所有视频与图片任务"""
+    video_n = clear_all_video_jobs()
+    image_n = clear_all_image_jobs()
+    return {"status": "success", "deleted": {"video": video_n, "image": image_n}}
 
 
 @router.get("/api/v1/admin/cache", dependencies=[Depends(verify_api_key)])

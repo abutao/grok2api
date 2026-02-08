@@ -4,7 +4,7 @@
 
 import asyncio
 import uuid
-from typing import Any, AsyncGenerator, AsyncIterable, Optional
+from typing import Any, AsyncGenerator, AsyncIterable, Callable, Optional
 
 import orjson
 from curl_cffi.requests.errors import RequestsError
@@ -24,12 +24,19 @@ from .base import (
 class VideoStreamProcessor(BaseProcessor):
     """视频流式响应处理器"""
 
-    def __init__(self, model: str, token: str = "", think: bool = None):
+    def __init__(
+        self,
+        model: str,
+        token: str = "",
+        think: bool = None,
+        on_progress: Optional[Callable[[int, Optional[dict]], None]] = None,
+    ):
         super().__init__(model, token)
         self.response_id: Optional[str] = None
         self.think_opened: bool = False
         self.role_sent: bool = False
         self.video_format = str(get_config("app.video_format")).lower()
+        self.on_progress = on_progress
 
         if think is None:
             self.show_think = get_config("chat.thinking")
@@ -95,6 +102,8 @@ class VideoStreamProcessor(BaseProcessor):
                 # 视频生成进度
                 if video_resp := resp.get("streamingVideoGenerationResponse"):
                     progress = video_resp.get("progress", 0)
+                    if self.on_progress:
+                        self.on_progress(progress, None)
 
                     if self.show_think:
                         if not self.think_opened:
@@ -118,14 +127,27 @@ class VideoStreamProcessor(BaseProcessor):
                                     thumbnail_url, "image"
                                 )
 
+                            content = (
+                                final_video_url
+                                if self.video_format == "url"
+                                else self._build_video_html(
+                                    final_video_url, final_thumbnail_url
+                                )
+                            )
                             if self.video_format == "url":
                                 yield self._sse(final_video_url)
                             else:
-                                video_html = self._build_video_html(
-                                    final_video_url, final_thumbnail_url
-                                )
-                                yield self._sse(video_html)
+                                yield self._sse(content)
 
+                            if self.on_progress:
+                                self.on_progress(
+                                    100,
+                                    {
+                                        "content": content,
+                                        "video_url": final_video_url,
+                                        "thumbnail_url": final_thumbnail_url or "",
+                                    },
+                                )
                             logger.info(f"Video generated: {video_url}")
                     continue
 
