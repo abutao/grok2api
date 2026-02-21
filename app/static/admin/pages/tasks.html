@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - 任务列表</title>
+  <link rel="icon" href="/static/common/img/favicon/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="/static/common/css/common.css?v=1.5.0" rel="stylesheet">
+  <link href="/static/admin/css/tasks.css?v=1.5.0" rel="stylesheet">
+  <link href="/static/common/css/toast.css" rel="stylesheet">
+  <style>
+    .task-preview-img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      cursor: zoom-in;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #eee;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #000;
+      transition: width 0.3s ease;
+    }
+    .code-block {
+      background: #f7f7f7;
+      border: 1px solid #eaeaea;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      color: #333;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col" style="background-color: var(--bg);">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-header"></div>
+
+  <!-- Main Content -->
+  <main class="space-y-6 flex-1 container mx-auto max-w-6xl px-6 py-8 fade-in">
+
+    <div class="space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-2xl font-semibold tracking-tight">任务列表</h2>
+          <p class="text-[var(--accents-4)] mt-1 text-sm">查看所有异步生成任务的状态与详情。</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="loadTasks()" class="geist-button-outline gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"></path>
+              <path d="M1 20v-6h6"></path>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            刷新
+          </button>
+        </div>
+      </div>
+
+      <div class="h-px bg-[var(--border)] my-6"></div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-4 mb-4 flex-wrap">
+        <!-- Status Filter -->
+        <div class="flex items-center gap-2" id="status-tabs" role="tablist">
+          <button class="tab-item active" data-status="" onclick="filterStatus('')">全部</button>
+          <button class="tab-item" data-status="pending" onclick="filterStatus('pending')">等待中</button>
+          <button class="tab-item" data-status="running" onclick="filterStatus('running')">进行中</button>
+          <button class="tab-item" data-status="completed" onclick="filterStatus('completed')">成功</button>
+          <button class="tab-item" data-status="failed" onclick="filterStatus('failed')">失败</button>
+        </div>
+        
+        <div class="h-4 w-px bg-[var(--border)]"></div>
+
+        <!-- Type Filter -->
+        <div class="flex items-center gap-2">
+           <select id="type-filter" class="geist-input h-[32px] text-sm w-32" onchange="loadTasks()">
+             <option value="">所有类型</option>
+             <option value="video">Video 视频</option>
+             <option value="image">Image 图片</option>
+           </select>
+        </div>
+      </div>
+
+      <!-- Tasks Table -->
+      <div class="rounded-lg overflow-hidden bg-white mb-4 overflow-x-auto border border-[var(--border)]">
+        <table class="geist-table min-w-[900px]">
+          <thead>
+            <tr>
+              <th class="w-10"><input type="checkbox" id="select-all" class="checkbox" onclick="toggleSelectAll()"></th>
+              <th class="w-16">类型</th>
+              <th class="w-64 text-left">Task ID</th>
+              <th class="w-24">状态</th>
+              <th class="w-32">进度</th>
+              <th class="w-48 text-left">提交内容 (摘要)</th>
+              <th class="w-24">结果</th>
+              <th class="w-40">创建时间</th>
+              <th class="w-24 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tasks-table-body">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+        <div id="loading" class="text-center py-12 text-[var(--accents-4)]">加载中...</div>
+        <div id="empty-state" class="hidden table-empty">
+          暂无任务数据。
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-bar">
+        <div id="pagination-info" class="text-xs text-[var(--accents-5)]">第 0 / 0 页 · 共 0 条</div>
+        <div class="flex items-center gap-2">
+          <button id="page-prev" class="geist-button-outline text-xs px-3" onclick="changePage(-1)">上一页</button>
+          <button id="page-next" class="geist-button-outline text-xs px-3" onclick="changePage(1)">下一页</button>
+          <select id="page-size" class="geist-input h-[30px]" onchange="changePageSize()">
+            <option value="20" selected>20 / 页</option>
+            <option value="50">50 / 页</option>
+            <option value="100">100 / 页</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </main>
+  <div id="app-footer"></div>
+
+  <!-- Batch Actions Bar (Floating Bottom) -->
+  <div id="batch-actions"
+    class="fixed bottom-8 left-1/2 -translate-x-1/2 z-20 bg-white border border-[var(--border)] rounded-full px-3 py-2 flex items-center shadow-lg gap-3 cursor-move select-none active:cursor-grabbing whitespace-nowrap hidden">
+    <div class="text-sm font-medium flex items-center gap-2">
+      <span class="text-[var(--accents-5)] text-xs">已选择</span>
+      <span class="bg-black text-white text-xs px-1.5 py-0.5 rounded-full" id="selected-count">0</span>
+      <span class="text-[var(--accents-5)] text-xs">项</span>
+    </div>
+    <span class="toolbar-sep"></span>
+    <div class="flex items-center gap-1">
+      <button id="btn-batch-delete" onclick="batchDelete()" class="geist-button-danger text-xs px-3">
+        一键清除已选
+      </button>
+      <button id="btn-clear-all" onclick="clearAllTasks()" class="geist-button-outline text-xs px-3 text-red-600 border-red-200 hover:border-red-600 hover:text-red-700">
+        清除全部任务
+      </button>
+      <button id="btn-cancel-select" onclick="clearSelection()" class="geist-button-outline text-xs px-3 border-0 hover:bg-gray-100">
+        取消选择
+      </button>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="modal-overlay hidden">
+    <div class="modal-content modal-lg" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 class="modal-title">任务详情</h3>
+        <button onclick="closeDetailModal()" class="modal-close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+        
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <label class="block text-[var(--accents-4)] mb-1">Task ID</label>
+            <div id="detail-id" class="font-mono select-all"></div>
+          </div>
+          <div>
+             <label class="block text-[var(--accents-4)] mb-1">创建时间</label>
+             <div id="detail-time"></div>
+          </div>
+          <div>
+            <label class="block text-[var(--accents-4)] mb-1">类型</label>
+            <div id="detail-type" class="font-medium"></div>
+          </div>
+          <div>
+            <label class="block text-[var(--accents-4)] mb-1">状态</label>
+            <div id="detail-status"></div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[var(--accents-4)] mb-1">提交内容 (Payload)</label>
+          <div id="detail-payload" class="code-block"></div>
+        </div>
+
+        <div id="detail-result-container" class="hidden">
+           <label class="block text-[var(--accents-4)] mb-1">生成结果</label>
+           <div id="detail-result" class="p-4 border rounded bg-gray-50 flex justify-center"></div>
+        </div>
+
+        <div id="detail-error-container" class="hidden">
+          <label class="block text-[var(--accents-4)] mb-1 text-red-500">错误信息</label>
+          <div id="detail-error" class="code-block text-red-600 bg-red-50 border-red-100"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer pt-4 mt-4 border-t flex justify-end">
+        <button onclick="closeDetailModal()" class="geist-button text-xs px-4">关闭 (ESC)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal (Video / Image) -->
+  <div id="preview-modal" class="modal-overlay hidden" onclick="if(event.target===this)closePreviewModal()">
+    <div class="modal-content" style="max-width:860px;background:#111;border-color:#333;padding:0;overflow:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #333;">
+        <a id="preview-modal-link" href="#" target="_blank" style="font-size:11px;color:#888;text-decoration:none;font-family:monospace;" title="在新标签页打开">在新标签页打开 ↗</a>
+        <button onclick="closePreviewModal()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:18px;line-height:1;padding:2px 6px;" title="关闭 (ESC)">✕</button>
+      </div>
+      <div id="preview-modal-body" style="padding:16px;display:flex;justify-content:center;align-items:center;min-height:200px;"></div>
+    </div>
+  </div>
+
+  <div id="confirm-dialog" class="modal-overlay confirm-dialog hidden">
+    <div class="modal-content modal-md">
+      <div class="confirm-dialog-body">
+        <div class="confirm-dialog-title">请确认</div>
+        <div id="confirm-message" class="confirm-dialog-message"></div>
+        <div class="confirm-dialog-actions">
+          <button id="confirm-cancel" type="button" class="geist-button-outline text-xs px-3">取消</button>
+          <button id="confirm-ok" type="button" class="geist-button-danger text-xs px-3">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common/js/admin-auth.js?v=1.5.0"></script>
+  <script src="/static/common/js/draggable.js"></script>
+  <script src="/static/common/js/header.js?v=1.5.0"></script>
+  <script src="/static/common/js/footer.js?v=1.5.0"></script>
+  <script src="/static/common/js/toast.js"></script>
+  <script src="/static/admin/js/tasks.js?v=1.5.0"></script>
+</body>
+
+</html>

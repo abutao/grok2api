@@ -1,0 +1,161 @@
+
+/* Base Overrides */
+:root {
+  --video-surface: #ffffff;
+  --video-bg: #f6f7fb;
+  --border: #eaeaea;
+  --accents-1: #fafafa;
+  --accents-2: #eaeaea;
+  --accents-3: #999;
+  --accents-4: #888;
+  --accents-5: #666;
+  --accents-7: #333;
+}
+
+body {
+  background-color: var(--video-bg);
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+}
+
+/* Task Type Cards */
+.task-type-card {
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-type-card:hover {
+  border-color: #000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.task-type-card.active {
+  border-color: #000;
+  background: #000;
+  color: white;
+}
+
+.task-type-card.active svg {
+  color: white;
+}
+
+.task-type-card.active .text-muted {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Sub Tabs */
+.sub-tab-btn {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accents-5);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.sub-tab-btn:hover {
+  color: #000;
+}
+
+.sub-tab-btn.active {
+  color: #000;
+  border-bottom-color: #000;
+}
+
+/* Form Elements */
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accents-7);
+  margin-bottom: 8px;
+}
+
+.geist-input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  background: #fff;
+}
+
+.geist-input:focus {
+  border-color: #000;
+  outline: none;
+}
+
+textarea.geist-input {
+  min-height: 120px;
+  line-height: 1.5;
+}
+
+/* File Upload */
+.file-input-wrapper {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  transition: border-color 0.2s;
+  background: #fafafa;
+}
+
+.file-input-wrapper:hover {
+  border-color: #000;
+  background: #fff;
+}
+
+/* Preview Card */
+.sticky {
+  position: sticky;
+  top: 24px;
+}
+
+/* Recent Tasks List */
+#recentTasksList::-webkit-scrollbar {
+  width: 4px;
+}
+
+#recentTasksList::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 2px;
+}
+
+/* Transitions */
+.hidden {
+  display: none !important;
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .flex-col {
+    flex-direction: column;
+  }
+  
+  .lg\:w-\[360px\] {
+    width: 100%;
+  }
+  
+  .sticky {
+    position: static;
+  }
+}

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - 异步任务</title>
+  <link rel="icon" href="/static/common/img/favicon/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="/static/common/css/common.css?v=1.5.0" rel="stylesheet">
+  <link href="/static/admin/css/text.css?v=1.6.0" rel="stylesheet">
+  <link href="/static/common/css/toast.css" rel="stylesheet">
+  <style>
+    /* Custom styles for the new layout */
+    .task-type-card {
+      @apply border border-[var(--border)] rounded-lg p-4 cursor-pointer transition-all hover:bg-[var(--accents-1)];
+    }
+    .task-type-card.active {
+      @apply border-black bg-black text-white;
+    }
+    .task-type-card.active .text-muted {
+      @apply text-gray-300;
+    }
+    .sub-tab-btn {
+      @apply px-4 py-2 text-sm font-medium text-[var(--accents-5)] border-b-2 border-transparent transition-colors hover:text-black;
+    }
+    .sub-tab-btn.active {
+      @apply text-black border-black;
+    }
+    .param-group-title {
+      @apply text-xs font-semibold text-[var(--accents-5)] uppercase tracking-wider mb-3 mt-4;
+    }
+    .preview-thumb {
+      @apply w-12 h-12 rounded bg-gray-100 object-cover border border-[var(--border)];
+    }
+    .fade-enter {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    .fade-enter-active {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    /* Hidden file input */
+    .file-input-wrapper {
+      @apply relative border-2 border-dashed border-[var(--border)] rounded-lg p-6 text-center cursor-pointer hover:border-black transition-colors;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col" style="background-color: var(--bg);">
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-header"></div>
+
+  <main class="flex-1 container mx-auto max-w-7xl px-4 py-8 fade-in">
+    
+    <!-- API Token Warning Banner -->
+    <div id="apiKeyWarning" class="hidden mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 fade-in">
+      <svg class="text-red-500 mt-0.5 flex-shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <div class="flex-1">
+        <h3 class="text-sm font-medium text-red-800">API 任务密钥无效或缺失</h3>
+        <p class="text-xs text-red-600 mt-1">检测到当前 API 任务密钥无效或未配置，无法提交生成任务。请在右侧配置栏更新。</p>
+        <button onclick="focusApiKeyInput()" class="mt-2 text-xs font-medium text-red-700 hover:text-red-800 underline">
+          立即配置 &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 1: Task Type Selection -->
+    <div class="mb-8">
+      <h2 class="text-2xl font-semibold tracking-tight mb-4">选择创作类型</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="task-type-card active" data-type="video" onclick="switchTaskType('video')">
+          <div class="flex items-center gap-3 mb-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+            <h3 class="text-lg font-medium">视频创作</h3>
+          </div>
+          <p class="text-sm text-muted">生成高质量短视频，支持文生视频与图生视频。</p>
+        </div>
+        <div class="task-type-card" data-type="image" onclick="switchTaskType('image')">
+          <div class="flex items-center gap-3 mb-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <h3 class="text-lg font-medium">图片创作</h3>
+          </div>
+          <p class="text-sm text-muted">基于Grok-2/3模型生成高分辨率图像。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-8">
+      
+      <!-- Left Column: Configuration -->
+      <div class="flex-1 space-y-6">
+        
+        <!-- Sub Tabs (Text-to-X vs Image-to-X) -->
+        <div class="border-b border-[var(--border)] flex gap-2" id="subTabsContainer">
+          <button class="sub-tab-btn active" data-mode="text" onclick="switchSubMode('text')">
+            <span id="tabTextLabel">文生视频</span>
+          </button>
+          <button class="sub-tab-btn" data-mode="image" onclick="switchSubMode('image')">
+             <span id="tabImageLabel">图生视频</span>
+          </button>
+        </div>
+
+        <!-- Input Area -->
+        <div class="bg-white rounded-xl border border-[var(--border)] p-6 shadow-sm">
+          
+          <!-- Text Input -->
+          <div id="textInputParams">
+            <label class="field-label mb-2 block">提示词 <span class="text-red-500">*</span></label>
+            <textarea id="promptInput" class="geist-input w-full h-32 resize-y mb-2" 
+              placeholder="描述你想要的画面，例如：赛博朋克风格的雨夜街道..."></textarea>
+            <div class="flex justify-between text-xs text-[var(--accents-4)]">
+              <span id="promptTip">支持中英文，建议使用详细的描述</span>
+              <span><span id="charCount">0</span>/2000</span>
+            </div>
+          </div>
+
+          <!-- Image Input (Hidden by default) -->
+          <div id="imageInputParams" class="hidden">
+             <label class="field-label mb-2 block">参考图片 <span class="text-red-500">*</span></label>
+             <div class="file-input-wrapper relative" id="dropZone">
+                <input type="file" id="imageFileInput" accept="image/png,image/jpeg,image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div class="flex flex-col items-center justify-center gap-2" id="uploadPlaceholder">
+                  <svg class="text-[var(--accents-3)]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  <p class="text-sm text-[var(--accents-5)]">点击或拖拽上传图片</p>
+                  <p class="text-xs text-[var(--accents-3)]">支持 JPG/PNG/WEBP，最大 10MB</p>
+                </div>
+                <div id="uploadPreview" class="hidden relative w-full h-48 bg-gray-50 flex items-center justify-center rounded overflow-hidden">
+                    <img id="previewImg" class="max-h-full max-w-full object-contain">
+                    <button id="clearImageBtn" class="absolute top-2 right-2 bg-white rounded-full p-1 shadow hover:bg-red-50 text-red-500">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+             </div>
+             <!-- Optional prompt for Image-to-X -->
+             <div class="mt-4">
+                <label class="field-label mb-2 block">补充描述 (可选)</label>
+                <input id="imgPromptInput" class="geist-input w-full" placeholder="对图片的补充描述...">
+             </div>
+          </div>
+
+        </div>
+
+        <!-- Advanced Params -->
+        <div class="bg-white rounded-xl border border-[var(--border)] p-6 shadow-sm">
+          <h4 class="text-lg font-medium mb-4">参数配置</h4>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Model Select -->
+            <div class="col-span-1 md:col-span-2">
+              <label class="field-label mb-2 block">生成模型</label>
+              <select id="modelSelect" class="geist-input w-full">
+                <!-- Dynamic Options -->
+              </select>
+              <p class="text-xs text-[var(--accents-4)] mt-1" id="modelDesc">选择合适的生成模型</p>
+            </div>
+
+            <!-- Ratio -->
+            <div>
+              <label class="field-label mb-2 block">画面比例</label>
+              <select id="ratioSelect" class="geist-input w-full">
+                <option value="16:9">16:9 宽屏</option>
+                <option value="9:16">9:16 竖屏</option>
+                <option value="1:1">1:1 方形</option>
+                <option value="3:2" selected>3:2 横图</option>
+                <option value="2:3">2:3 竖图</option>
+                <option value="4:3">4:3 标准</option>
+                <option value="3:4">3:4 竖向</option>
+              </select>
+            </div>
+
+            <!-- Resolution (Video only) / Quality (Image only) -->
+            <div id="resParam">
+              <label class="field-label mb-2 block">分辨率</label>
+              <select id="resolutionSelect" class="geist-input w-full">
+                <option value="720p">720p 高清</option>
+                <option value="480p">480p 标清</option>
+              </select>
+            </div>
+
+            <!-- Duration (Video only) -->
+            <div id="durationParam">
+              <label class="field-label mb-2 block">视频时长</label>
+              <select id="durationSelect" class="geist-input w-full">
+                <option value="6">6 秒</option>
+                <option value="10">10 秒</option>
+                <option value="15">15 秒</option>
+              </select>
+            </div>
+            
+            <!-- Style Preset -->
+            <div id="presetParam">
+              <label class="field-label mb-2 block">风格预设</label>
+              <select id="presetSelect" class="geist-input w-full">
+                <option value="normal">写实 (Normal)</option>
+                <option value="anime">动漫 (Anime)</option>
+                <option value="cinematic">电影感 (Cinematic)</option>
+                <option value="3d">3D 渲染</option>
+              </select>
+            </div>
+
+             <!-- Task Name -->
+            <div class="col-span-1 md:col-span-2">
+              <label class="field-label mb-2 block">任务名称</label>
+              <input id="taskNameInput" class="geist-input w-full" placeholder="未命名任务">
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Preview & Status -->
+      <div class="w-full lg:w-[360px] space-y-6">
+
+        <!-- API Key Configuration -->
+        <div class="bg-white rounded-xl border border-[var(--border)] p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="text-lg font-medium">API 任务密钥配置</h4>
+            <div class="flex flex-col items-end">
+              <span id="keyStatusBadge" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">检测中...</span>
+              <span id="lastVerifiedTime" class="text-[10px] text-gray-400 mt-1 hidden">上次验证: --:--</span>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <div class="relative">
+              <input id="apiKeyInput" type="password" class="geist-input w-full pr-10" placeholder="请输入 API Token (用于提交任务)">
+              <button id="toggleKeyVisibility" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--accents-4)] hover:text-black">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <button id="verifyKeyBtn" class="geist-button-outline w-full justify-center h-9 text-sm">
+              验证并保存
+            </button>
+          </div>
+        </div>
+        
+        <!-- Action Card -->
+        <div class="bg-white rounded-xl border border-[var(--border)] p-6 shadow-sm sticky top-6">
+          <h4 class="text-lg font-medium mb-4">任务预览</h4>
+          
+          <div class="space-y-4 mb-6 text-sm">
+            <div class="flex justify-between py-2 border-b border-gray-100">
+              <span class="text-[var(--accents-5)]">类型</span>
+              <span class="font-medium" id="previewType">文生视频</span>
+            </div>
+             <div class="flex justify-between py-2 border-b border-gray-100">
+              <span class="text-[var(--accents-5)]">模型</span>
+              <span class="font-medium" id="previewModel">-</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-100">
+              <span class="text-[var(--accents-5)]">参数</span>
+              <span class="font-medium text-right truncate w-32" id="previewParams">-</span>
+            </div>
+             <div class="flex justify-between py-2 border-b border-gray-100">
+              <span class="text-[var(--accents-5)]">预计耗时</span>
+              <span class="font-medium text-green-600" id="estTime">~60s</span>
+            </div>
+          </div>
+
+          <button id="submitBtn" class="geist-button w-full justify-center h-10 text-base mb-3">
+            立即生成
+          </button>
+          
+          <button id="resetBtn" class="geist-button-outline w-full justify-center h-9 text-sm">
+            重置参数
+          </button>
+        </div>
+
+        <!-- Recent Tasks Mini List -->
+        <div class="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-[var(--border)] flex justify-between items-center bg-gray-50">
+            <h5 class="font-medium text-sm">最近任务</h5>
+            <a href="/admin/tasks" class="text-xs text-blue-500 hover:underline">查看全部</a>
+          </div>
+          <div id="recentTasksList" class="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+             <!-- Dynamic List -->
+             <div class="p-4 text-center text-xs text-[var(--accents-4)]">暂无记录</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/common/js/admin-auth.js?v=1.6.0"></script>
+  <script src="/static/common/js/header.js?v=1.6.0"></script>
+  <script src="/static/common/js/footer.js?v=1.6.0"></script>
+  <script src="/static/common/js/toast.js"></script>
+  <script src="/static/admin/js/text.js?v=1.6.0"></script>
+</body>
+</html>
