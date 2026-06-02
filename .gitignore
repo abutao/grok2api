@@ -53,3 +53,6 @@ htmlcov/
 
 # Project specific
 .ace-tool/
+CLAUDE.md
+STATSIG_SIGNER_PLAN.md
+docs/grok_signer_factory.dump.js

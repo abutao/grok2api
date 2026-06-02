@@ -1,8 +1,8 @@
 services:
   grok2api:
     container_name: grok2api
-    # 本地构建以使代码改动生效（原为 image: ghcr.io/chenyme/grok2api:latest）
-    build: .
+    # 使用推送到 DockerHub 的镜像；改代码后需重新 build + push 才生效
+    image: duanzhenyu/grok2api:latest
     ports:
       - "${HOST_PORT:-8000}:${SERVER_PORT:-8000}"
     environment:
@@ -38,7 +38,7 @@ services:
   # x-statsig-id 签名机：无头浏览器跑 grok 自己的 JS 实时算签名
   statsig-signer:
     container_name: statsig-signer
-    build: ./statsig-signer
+    image: duanzhenyu/statsig-signer:latest
     environment:
       TZ: Asia/Shanghai
       PORT: "3000"
