@@ -33,6 +33,24 @@ services:
       - ./logs:/app/logs
     depends_on:
       - statsig-signer
+      - mihomo
+    restart: unless-stopped
+
+  # 订阅代理池内核：把 Clash 订阅的每个节点暴露成本地 socks 端口，供 grok2api
+  # 在 proxy.egress.mode=subscription 时按账号轮换 IP。不用订阅模式时它空跑、无副作用。
+  # grok2api 会生成 ./data/mihomo.yaml 并通过控制接口热重载本服务。
+  mihomo:
+    container_name: mihomo
+    image: metacubex/mihomo:latest
+    volumes:
+      - ./data:/data
+    # 首启时 mihomo.yaml 尚未生成，先写一份最小可启动配置；之后由 grok2api 覆盖并 reload。
+    # 默认 secret 为空，与 proxy.subscription.mihomo_secret 默认值一致。
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        [ -f /data/mihomo.yaml ] || printf 'mixed-port: 7099\nexternal-controller: 0.0.0.0:9090\nsecret: ""\nlog-level: warning\n' > /data/mihomo.yaml
+        exec /mihomo -d /data -f /data/mihomo.yaml
     restart: unless-stopped
 
   # x-statsig-id 签名机：无头浏览器跑 grok 自己的 JS 实时算签名

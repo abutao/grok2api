@@ -390,7 +390,7 @@ async def _stream_chat(
 ) -> AsyncGenerator[str, None]:
     """Yield raw SSE lines from the Grok app-chat endpoint."""
     proxy = await get_proxy_runtime()
-    lease = await proxy.acquire()
+    lease = await proxy.acquire(account_id=token)
     attachments = await _prepare_file_attachments(token, files)
 
     payload = build_chat_payload(

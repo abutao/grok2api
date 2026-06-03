@@ -236,12 +236,20 @@ async def lifespan(app: FastAPI):
 
     # 5. Initialise proxy directory and start clearance refresh scheduler.
     from app.control.proxy import get_proxy_directory
-    from app.control.proxy.scheduler import ProxyClearanceScheduler
+    from app.control.proxy.models import EgressMode
+    from app.control.proxy.scheduler import ProxyClearanceScheduler, SubscriptionScheduler
 
     proxy_dir = await get_proxy_directory()
     proxy_scheduler = ProxyClearanceScheduler(proxy_dir)
     if is_leader:
         proxy_scheduler.start()
+
+    # 5a. Subscription proxy pool — leader-only, only when egress mode uses it.
+    #     Pulls the Clash subscription, drives the mihomo sidecar, tests nodes
+    #     and writes the healthy pool that every worker reads.
+    subscription_scheduler = SubscriptionScheduler()
+    if is_leader and proxy_dir.egress_mode == EgressMode.SUBSCRIPTION:
+        subscription_scheduler.start()
 
     logger.info("application startup completed")
     yield
@@ -259,6 +267,7 @@ async def lifespan(app: FastAPI):
     if is_leader:
         scheduler.stop()
         proxy_scheduler.stop()
+        subscription_scheduler.stop()
         _release_scheduler_lock()
 
     set_refresh_scheduler(None)

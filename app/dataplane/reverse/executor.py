@@ -63,9 +63,9 @@ async def execute(
             latency_ms=int(now_ms() - t0),
         )
 
-    # Step 3: Acquire proxy
+    # Step 3: Acquire proxy (account_id enables per-account sticky IP in subscription mode)
     proxy_runtime = await get_proxy_runtime()
-    proxy_lease = await proxy_runtime.acquire()
+    proxy_lease = await proxy_runtime.acquire(account_id=lease.token)
 
     leases = ReverseLeaseSet(
         account_idx=lease.idx,

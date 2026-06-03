@@ -80,4 +80,83 @@ class ProxyClearanceScheduler:
         return cfg.get_int("proxy.clearance.refresh_interval", 600)
 
 
-__all__ = ["ProxyClearanceScheduler"]
+class SubscriptionScheduler:
+    """Leader-only scheduler for subscription-driven proxy pools.
+
+    Two cadences:
+      - full refresh  → re-pull subscription, regenerate mihomo config, reload,
+        retest  (proxy.subscription.refresh_interval_sec, default 1800)
+      - light retest  → re-measure latency of the existing pool only
+        (proxy.subscription.test_interval_sec, default 300)
+    """
+
+    def __init__(self) -> None:
+        self._tasks: list[asyncio.Task] = []
+        self._stop = asyncio.Event()
+
+    def is_running(self) -> bool:
+        return any(not t.done() for t in self._tasks)
+
+    def start(self) -> None:
+        if self.is_running():
+            return
+        self._stop.clear()
+        self._tasks = [
+            asyncio.create_task(self._refresh_loop(), name="subscription-refresh"),
+            asyncio.create_task(self._retest_loop(), name="subscription-retest"),
+        ]
+        logger.info("subscription scheduler started")
+
+    def stop(self) -> None:
+        was_running = self.is_running()
+        self._stop.set()
+        for t in self._tasks:
+            if not t.done():
+                t.cancel()
+        self._tasks = []
+        if was_running:
+            logger.info("subscription scheduler stopped")
+
+    async def _refresh_loop(self) -> None:
+        from .subscription import get_subscription_manager
+
+        manager = get_subscription_manager()
+        # Warm up immediately so the pool exists before the first request.
+        try:
+            await manager.refresh()
+        except Exception as exc:
+            logger.warning("subscription warm-up refresh failed: error={}", exc)
+        while not self._stop.is_set():
+            interval = get_config().get_int("proxy.subscription.refresh_interval_sec", 1800)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=float(interval))
+                break
+            except asyncio.TimeoutError:
+                pass
+            try:
+                await manager.refresh()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("subscription refresh failed: error={}", exc)
+
+    async def _retest_loop(self) -> None:
+        from .subscription import get_subscription_manager
+
+        manager = get_subscription_manager()
+        while not self._stop.is_set():
+            interval = get_config().get_int("proxy.subscription.test_interval_sec", 300)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=float(interval))
+                break
+            except asyncio.TimeoutError:
+                pass
+            try:
+                await manager.retest()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("subscription retest failed: error={}", exc)
+
+
+__all__ = ["ProxyClearanceScheduler", "SubscriptionScheduler"]

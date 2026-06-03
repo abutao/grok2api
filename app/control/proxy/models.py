@@ -20,7 +20,8 @@ class RequestKind(StrEnum):
 class EgressMode(StrEnum):
     DIRECT       = "direct"        # no proxy
     SINGLE_PROXY = "single_proxy"  # one fixed proxy URL
-    PROXY_POOL   = "proxy_pool"    # rotate from a pool
+    PROXY_POOL   = "proxy_pool"    # rotate from a static pool
+    SUBSCRIPTION = "subscription"  # pool sourced from Clash subscription via mihomo sidecar
 
 
 class ClearanceMode(StrEnum):
@@ -68,6 +69,8 @@ class EgressNode(BaseModel):
     health:     float            = 1.0
     inflight:   int              = 0
     last_used:  int | None       = None  # ms
+    name:       str              = ""    # upstream node label (subscription mode)
+    latency_ms: int | None       = None  # measured delay; None = untested/unreachable
 
 
 class ClearanceBundle(BaseModel):

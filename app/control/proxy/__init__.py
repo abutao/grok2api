@@ -6,6 +6,9 @@ configuration loading and clearance refresh lifecycle.
 """
 
 import asyncio
+import hashlib
+import json
+import os
 from urllib.parse import urlparse
 
 from app.platform.logging.logger import logger
@@ -58,6 +61,8 @@ class ProxyDirectory:
         # Pool cursor for PROXY_POOL mode: sticky routing with failure-driven rotate.
         # Incremented on node failure; all callers see the same cursor under _lock.
         self._pool_cursor: int = 0
+        # SUBSCRIPTION mode: nodes with latency <= this are the primary tier.
+        self._primary_latency_ms: int = 1500
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -74,6 +79,10 @@ class ProxyDirectory:
         res_url = cfg.get_str("proxy.egress.resource_proxy_url", "")
         base_pool = tuple(cfg.get_list("proxy.egress.proxy_pool", []))
         res_pool = tuple(cfg.get_list("proxy.egress.resource_proxy_pool", []))
+        primary_latency = cfg.get_int("proxy.subscription.primary_latency_ms", 1500)
+        # Pool file mtime joins the signature so followers reload when the leader
+        # rewrites the healthy-node pool (subscription mode).
+        pool_mtime = _subscription_pool_mtime() if egress_mode == EgressMode.SUBSCRIPTION else 0
         clearance = resolve_clearance_config(cfg)
         config_sig = (
             egress_mode.value,
@@ -82,6 +91,8 @@ class ProxyDirectory:
             res_url,
             base_pool,
             res_pool,
+            primary_latency,
+            pool_mtime,
             cfg.get_str("proxy.clearance.flaresolverr_url", ""),
             clearance.cf_cookies,
             clearance.user_agent,
@@ -93,7 +104,11 @@ class ProxyDirectory:
         nodes: list[EgressNode] = []
         resource_nodes: list[EgressNode] = []
 
-        if egress_mode == EgressMode.SINGLE_PROXY:
+        if egress_mode == EgressMode.SUBSCRIPTION:
+            nodes = _load_subscription_pool()
+            resource_nodes = list(nodes)
+
+        elif egress_mode == EgressMode.SINGLE_PROXY:
             if base_url:
                 nodes.append(EgressNode(node_id="single", proxy_url=base_url))
             if res_url:
@@ -122,6 +137,7 @@ class ProxyDirectory:
             self._clearance_mode = clearance_mode
             self._nodes = nodes
             self._resource_nodes = resource_nodes
+            self._primary_latency_ms = primary_latency
             self._pool_cursor = 0
             self._bundles = {
                 key: bundle.model_copy(update={"state": ClearanceBundleState.INVALID})
@@ -154,12 +170,23 @@ class ProxyDirectory:
         kind: RequestKind = RequestKind.HTTP,
         resource: bool = False,
         clearance_origin: str | None = None,
+        account_id: str | None = None,
     ) -> ProxyLease:
         """Return a ProxyLease for the next request.
 
-        For DIRECT mode, returns a lease with no proxy or clearance.
+        For DIRECT mode, returns a lease with no proxy or clearance. In
+        SUBSCRIPTION mode ``account_id`` enables sticky per-account IP routing.
         """
-        proxy_url = await self._pick_proxy_url(resource=resource)
+        proxy_url = await self._pick_proxy_url(resource=resource, account_id=account_id)
+        # Fail closed: subscription mode must never silently fall back to direct
+        # egress — leaking the origin IP defeats the mode and gets accounts
+        # rate-limited. Better to reject until a healthy node pool exists.
+        if self._egress_mode == EgressMode.SUBSCRIPTION and not proxy_url:
+            from app.platform.errors import UpstreamError
+
+            raise UpstreamError(
+                "No healthy subscription egress available", status=503
+            )
         affinity = proxy_url or "direct"
         clearance_host = _clearance_host(clearance_origin)
 
@@ -197,11 +224,11 @@ class ProxyDirectory:
                         update={"state": ClearanceBundleState.INVALID}
                     )
 
-        # In PROXY_POOL mode, rotate to the next node on any failure so the
+        # In pooled modes, rotate to the next node on any failure so the
         # next acquire() prefers a different egress rather than hammering the
         # same broken node.
         if (
-            self._egress_mode == EgressMode.PROXY_POOL
+            self._egress_mode in (EgressMode.PROXY_POOL, EgressMode.SUBSCRIPTION)
             and lease.proxy_url
             and result.kind
             in (
@@ -224,7 +251,9 @@ class ProxyDirectory:
     # Internal
     # ------------------------------------------------------------------
 
-    async def _pick_proxy_url(self, resource: bool = False) -> str | None:
+    async def _pick_proxy_url(
+        self, resource: bool = False, account_id: str | None = None
+    ) -> str | None:
         if self._egress_mode == EgressMode.DIRECT:
             return None
         async with self._lock:
@@ -238,9 +267,42 @@ class ProxyDirectory:
                 return None
             if self._egress_mode == EgressMode.SINGLE_PROXY:
                 return nodes[0].proxy_url
+            if self._egress_mode == EgressMode.SUBSCRIPTION:
+                return self._pick_subscription_node(nodes, account_id)
             # PROXY_POOL: sticky routing — use current cursor, rotate on failure.
             idx = self._pool_cursor % len(nodes)
             return nodes[idx].proxy_url
+
+    def _pick_subscription_node(
+        self, nodes: list[EgressNode], account_id: str | None
+    ) -> str | None:
+        """Latency-tiered, per-account-sticky selection.
+
+        Prefer the primary tier (latency <= threshold); fall back to backup
+        (reachable but slow) only when no primary node exists. Within a tier an
+        account sticks to one node via a stable hash, so the same account keeps
+        the same egress IP instead of hopping between them.
+        """
+        primary_ids = {
+            n.node_id
+            for n in nodes
+            if n.latency_ms is not None and n.latency_ms <= self._primary_latency_ms
+        }
+        primary = [n for n in nodes if n.node_id in primary_ids]
+        backup = [n for n in nodes if n.node_id not in primary_ids]
+        tier = primary or backup or nodes
+        # Order by stable node identity (NOT latency) so the per-account hash maps
+        # to the same node across retests — latency only decides tier membership,
+        # it must not reshuffle the mapping or accounts would hop IPs every retest.
+        tier = sorted(tier, key=lambda n: n.node_id)
+        if account_id:
+            base = int(hashlib.md5(account_id.encode()).hexdigest(), 16)
+            # Add the failure cursor so a bad node steers the account elsewhere on
+            # retry; while no failures occur the cursor is stable → sticky IP.
+            idx = (base + self._pool_cursor) % len(tier)
+        else:
+            idx = self._pool_cursor % len(tier)  # no identity → rotate across the tier
+        return tier[idx].proxy_url
 
     async def _get_or_build_bundle(
         self,
@@ -410,6 +472,51 @@ class ProxyDirectory:
     def bundles(self) -> dict[BundleKey, ClearanceBundle]:
         """Read-only snapshot of the current clearance bundles."""
         return dict(self._bundles)
+
+
+# ---------------------------------------------------------------------------
+# Subscription pool file (written by the leader's SubscriptionManager)
+# ---------------------------------------------------------------------------
+
+
+def _pool_file() -> str:
+    from app.platform.paths import data_path
+
+    return str(data_path("proxy_pool.json"))
+
+
+def _subscription_pool_mtime() -> int:
+    # Nanosecond precision: sub-second refresh/retest/write bursts must still be
+    # seen by follower workers, which detect pool changes via this value.
+    try:
+        return os.stat(_pool_file()).st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _load_subscription_pool() -> list[EgressNode]:
+    """Build healthy EgressNodes from the persisted subscription pool file.
+
+    Only nodes flagged healthy at the last test are exposed for routing.
+    """
+    try:
+        with open(_pool_file(), encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, ValueError):
+        return []
+    nodes: list[EgressNode] = []
+    for n in payload.get("nodes", []):
+        if not n.get("healthy"):
+            continue
+        nodes.append(
+            EgressNode(
+                node_id=n["node_id"],
+                proxy_url=n["proxy_url"],
+                name=n.get("name", ""),
+                latency_ms=n.get("latency_ms"),
+            )
+        )
+    return nodes
 
 
 # ---------------------------------------------------------------------------
