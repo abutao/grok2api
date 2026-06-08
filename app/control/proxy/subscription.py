@@ -30,6 +30,23 @@ from app.platform.runtime.clock import now_ms
 _SUB_UA = "clash-verge/v2.0.0"
 _FETCH_TIMEOUT = 30
 
+# mihomo parses YAML with Go's yaml.v3, whose scalar resolver is broader than
+# PyYAML's (YAML 1.1). A bare string like a REALITY short-id "473277e2" is left
+# unquoted by safe_dump but read back by mihomo as the float 4.73277e+07, which
+# fails REALITY validation and crash-loops the sidecar. Rather than chase Go's
+# full resolver token-by-token (underscored numbers, signed 0o/0x, timestamps…),
+# force-quote *every* string scalar so it always survives as a string. Only
+# Python str values are affected; real ints/floats/bools keep their native form.
+class _MihomoDumper(yaml.SafeDumper):
+    """SafeDumper that single-quotes all string scalars for Go yaml.v3 safety."""
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="'")
+
+
+_MihomoDumper.add_representer(str, _represent_str)
+
 # Authenticated grok probe used by verify_with_grok mode. The rate-limits API
 # is a *read* (does not consume the account's chat quota) yet traverses the full
 # statsig-signed + Cloudflare path, so a风控'd egress IP shows up as 403/challenge.
@@ -595,7 +612,9 @@ class SubscriptionManager:
         path = self._local_config_path()
         tmp = f"{path}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
+            yaml.dump(
+                config, f, Dumper=_MihomoDumper, allow_unicode=True, sort_keys=False
+            )
         os.replace(tmp, path)
 
     def _write_pool(self, state: PoolState) -> None:
