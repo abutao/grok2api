@@ -28,6 +28,9 @@ const SIGN_TTL_MS = parseInt(process.env.SIGN_TTL_MS || "45000", 10); // server 
 const SIGN_CACHE_MAX = parseInt(process.env.SIGN_CACHE_MAX || "512", 10);
 const READY_TIMEOUT_MS = parseInt(process.env.READY_TIMEOUT_MS || "90000", 10);
 const EVAL_TIMEOUT_MS = parseInt(process.env.EVAL_TIMEOUT_MS || "10000", 10);
+// Background self-heal interval: re-attempt launch while the signer is not ready
+// (e.g. boot raced a CF-blocked egress node) so it recovers without manual restart.
+const WATCHDOG_MS = parseInt(process.env.WATCHDOG_MS || "30000", 10);
 const TEST_PATH = "/rest/app-chat/conversations/new";
 
 // Robust chunk injection: match `.A(<n>).then(<x>=><y>(<x>.default()))` and
@@ -301,6 +304,9 @@ async function sign(path, method) {
   }
   if (!isValidSig(sig)) throw new Error("signer returned fallback/invalid value");
 
+  // A real signature is the strongest proof the signer is usable; clear any
+  // stale not-ready state so /health stops reporting a false negative.
+  ready = true;
   cachePut(key, sig, now + SIGN_TTL_MS);
   return sig;
 }
@@ -369,6 +375,11 @@ const server = http.createServer(async (req, res) => {
     log("initial launch failed:", e.message);
     // Server stays up; /sign will retry launch on demand.
   }
+  // Self-heal: keep retrying in the background until ready, so a boot that raced
+  // a CF-blocked egress node recovers on its own once the egress switches over.
+  setInterval(() => {
+    if (!ready) ensureLaunched().catch(() => {});
+  }, WATCHDOG_MS).unref();
 })();
 
 process.on("SIGTERM", async () => {
